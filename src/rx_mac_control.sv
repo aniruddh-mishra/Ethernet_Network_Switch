@@ -413,8 +413,7 @@ end
 // output state machine (GMII clk domain) - comb logic 
 // =========================================================================
 
-typedef enum logic [1:0] {
-    OUT_IDLE,
+typedef enum logic {
     OUT_READ,
     OUT_EOF
 } out_state_t;
@@ -434,17 +433,10 @@ always_comb begin
     next_fifo_underflow_count = fifo_underflow_count;
 
     case (out_current_state)
-        OUT_IDLE: begin
-            if (!fifo_empty) begin
-                next_fifo_rd_en = 1'b1;
-                out_next_state = OUT_READ;
-            end
-        end
-
         OUT_READ: begin
             if (!fifo_empty) begin // continue reading 
-                // eof=1, sof=1, valid=1, error, data = byte_count[6:0]
                 next_fifo_rd_en = 1'b1;
+                // eof=1, sof=0, valid=1, error, data = byte_count[6:0]
                 if (next_frame_eof) begin // eof detected
                     next_frame_error = fifo_dout[DATA_WIDTH-1]; // error bit
                     next_frame_length = {fifo_dout[DATA_WIDTH-2:0]}; // get lower 7 bits
@@ -457,14 +449,16 @@ always_comb begin
 
         OUT_EOF: begin
             if (!fifo_empty) begin 
+                next_fifo_rd_en = 1'b1;
                 // eof=1, sof=0, valid=1, data = {4{1'b0}, byte_count[10:7]}
                 next_frame_length = {fifo_dout[$clog2(MAX_FRAME_SIZE)-1-7:0], next_frame_length[DATA_WIDTH-2:0]}; // reconstruct length from two cycles
-                out_next_state = OUT_IDLE;
+                out_next_state = OUT_READ;
             end else begin
                 next_fifo_underflow_count = fifo_underflow_count + 1;
             end
+        end
 
-        default: out_next_state = OUT_IDLE;
+        default: out_next_state = OUT_READ;
     endcase
 end
 
