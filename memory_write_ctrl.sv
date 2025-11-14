@@ -93,6 +93,7 @@ module memory_write_ctrl (
                     mem_we    <= 1'b1;
                 end
             endcase
+        end
     end
     
     // next state logic
