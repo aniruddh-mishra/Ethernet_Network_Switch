@@ -14,7 +14,7 @@ module memory_write_ctrl (
 
     // iterface with free list
     output logic fl_alloc_req_o,
-    input logic fl_grant_req_i,
+    input logic fl_alloc_gnt,
     input logic [ADDR_W-1:0] fl_alloc_idx_i,
 
     // dual port memory, write will use port a
