@@ -1,4 +1,3 @@
-
 module rx_mac_control #(
     parameter DATA_WIDTH = 8,
     parameter BLOCK_SIZE = 8, // in bytes
