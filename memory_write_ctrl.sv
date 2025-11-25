@@ -15,18 +15,21 @@ module memory_write_ctrl (
     // iterface with free list
     output logic fl_alloc_req_o,
     input logic fl_alloc_gnt,
-    input logic [ADDR_W-1:0] fl_alloc_idx_i,
+    input logic [ADDR_W-1:0] fl_alloc_block_idx_i,
 
     // dual port memory, write will use port a
     output logic mem_we_o,
     output logic mem_addr_o,
     output logic [BLOCK_BITS-1:0] mem_wdata
-
-    // TODO: return allocation metadata
 );
     localparam int CELL_PAYLOAD_LAST_BEAT = 6; // (n + 1) * 8, 56 bytes for now
 
-    typedef enum logic [1:0] {IDLE, WAIT_FIRST, WRITE_PAYLOAD, WAIT_SECOND, WRITE_FOOTER} state_t;
+    typedef enum logic [1:0] {IDLE, WRITE_PAYLOAD, WRITE_FOOTER} state_t;
+
+    logic frame_allocated;
+    logic next_frame_allocated;
+
+    assign fl_alloc_req_o = !frame_allocated || !next_frame_allocated;
 
     // locals
     state_t state, state_n;
@@ -37,14 +40,16 @@ module memory_write_ctrl (
     logic [ADDR_W-1:0] curr_idx; // current block idx
     logic [ADDR_W-1:0] next_idx; // used for footer
 
-    assign fl_alloc_req_o = 
-        (state == IDLE && data_valid_i && data_begin_i) || 
-        (state == WRITE_PAYLOAD && (beat_cnt == CELL_PAYLOAD_LAST_BEAT) && !data_end_i);
-    
-    assign data_ready_o = state == IDLE; // TODO: fix this
+    assign data_ready_o = (state != WAIT_FIRST) && (state != WAIT_SECOND);
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
+            state <= IDLE;
+            payload_reg <= 0;
+            beat_cnt <= 0;
+            curr_idx <= 0;
+            next_idx <= 0;
+            frame_allocated <= 0;
         end
         else begin
             state <= state_n;
@@ -52,45 +57,47 @@ module memory_write_ctrl (
             mem_we_o <= 0;
             mem_addr_o <= 0;
 
+            if (state != IDLE) begin                
+                if (!frame_allocated && fl_alloc_gnt) begin
+                    curr_idx <= fl_alloc_idx;
+                    frame_allocated <= 1;
+                end
+                if (frame_allocated && !next_frame_allocated && fl_alloc_gnt) begin
+                    next_idx <= fl_alloc_idx;
+                    next_frame_allocated <= 1;
+                end
+            end
+
             case (state)
                 IDLE: begin
+                    frame_allocated <= 0;
+                    next_frame_allocated <= 0;
                     beat_cnt <= 0;
+
+                    if (data_valid_i)
+                        payload_reg <= data_i;
                 end
 
-                WAIT_FIRST: begin
-                    if (fl_alloc_gnt)
-                        curr_idx   <= fl_alloc_idx;
-                end
-
-                WRITE_PAYLOAD: begin
+                WRITE_PAYLOAD: begin                        
                     if (data_valid_i) begin
                         payload_reg <= {payload_reg[PAYLOAD_BITS-64-1:0], data_i};
                         beat_cnt <= beat_cnt + 1;
-
-                        if (fl_alloc_gnt) 
-                            next_idx <= fl_alloc_idx; // early capture
                     end
-                end
-
-                WAIT_SECOND: begin
-                    if (fl_alloc_gnt) 
-                        next_idx <= fl_alloc_idx;
                 end
 
                 WRITE_FOOTER: begin
                     footer.next_idx <= next_idx;
-                    footer.eop      <= s_eop;
-                    footer.valid    <= 1;
-                    footer.rsvd     <= 0;
+                    footer.eop <= s_eop;
+                    footer.valid <= 1;
+                    footer.rsvd <= 0;
 
                     if (!data_end_i) begin
-                        curr_idx <= next_idx; // hand over to next cell
                         beat_cnt <= 3'd0;
                     end
 
-                    mem_addr  <= curr_idx;
-                    mem_wdata <= { payload_reg , link_word };
-                    mem_we    <= 1'b1;
+                    mem_addr <= curr_idx;
+                    mem_wdata <= { payload_reg , footer };
+                    mem_we <= 1'b1;
                 end
             endcase
         end
@@ -99,33 +106,26 @@ module memory_write_ctrl (
     // next state logic
     always_comb begin
         state_n = state;
+
         case (state)
             IDLE: begin
                 if (data_valid_i && data_begin_i)
-                    state_n = WAIT_FIRST;
-            end
-
-            WAIT_FIRST: begin
-                if (fl_alloc_gnt)
                     state_n = WRITE_PAYLOAD;
             end
 
             WRITE_PAYLOAD: begin
-                if (data_valid_i && (beat_cnt == CELL_PAYLOAD_LAST_BEAT)) begin
-                    if (data_end_i || fl_alloc_gnt)                     
-                        state_n = WRITE_FOOTER;                 
-                    else                           
-                        state_n = WAIT_SECOND;   // need to wait
-                end
+                if (data_valid_i && (beat_cnt == CELL_PAYLOAD_LAST_BEAT))
+                    state_n = (frame_allocated && next_frame_allocated) ? WRITE_FOOTER : WAIT;
             end
 
-            WAIT_SECOND: begin
-                if (fl_alloc_gnt)
+            WAIT: begin
+                if (frame_allocated && next_frame_allocated)
                     state_n = WRITE_FOOTER;
             end
 
             WRITE_FOOTER: begin
-                state_n = s_eop ? IDLE : FILL;
+                state_n = data_end_i ? IDLE : WRITE_PAYLOAD;
+                // TODO: FIX SINGLE FRAME LEAK IF WE GO TO IDLE STATE (LOW PRIORITY)
             end
         endcase
     end

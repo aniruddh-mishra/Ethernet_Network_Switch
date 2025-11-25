@@ -121,9 +121,7 @@ module tb_async_fifo;
         end
     end
 
-    // ----------------------------------------------------------------
-    // Protocol safety checks
-    // ----------------------------------------------------------------
+    // useful checks
     always_ff @(posedge wclk) begin
         if (wrst_n && w_en && w_full)
             $error("Write when full @%0t", $time);
@@ -134,9 +132,6 @@ module tb_async_fifo;
             $error("Read when empty @%0t", $time);
     end
 
-    // ----------------------------------------------------------------
-    // End of sim
-    // ----------------------------------------------------------------
     initial begin
         #200_000;
         $display("TX=%0d RX=%0d remaining_in_q=%0d", tx_cnt, rx_cnt, q.size());

@@ -1,8 +1,8 @@
 package mem_pkg;
     parameter int unsigned BLOCK_BYTES = 64; // cell size bytes
-    parameter int unsigned NUM_CELLS = 4096; // number of memory cells
-    localparam int unsigned ADDR_W = $clog2(NUM_CELLS); // ptr size
-    localparam int unsigned LINK_BYTES = 8; // last 8 B of cell used to point to next cell
+    parameter int unsigned NUM_BLOCKS = 4096; // number of memory cells
+    localparam int unsigned ADDR_W = $clog2(NUM_BLOCKS); // ptr size
+    localparam int unsigned FOOTER_BYTES = 8; // last 8 B of cell used to point to next cell
     localparam int unsigned PAYLOAD_BYTES= BLOCK_BYTES-LINK_BYTES; // 56 B
     localparam int unsigned BLOCK_BITS = BLOCK_BYTES*8;
 
@@ -20,7 +20,7 @@ import mem_pkg::*;
 // simple 2 port sram cell, 1 clk latency
 module sram #(
     parameter int unsigned BLOCK_BYTES = BLOCK_BYTES,
-    parameter int unsigned NUM_CELLS = NUM_CELLS
+    parameter int unsigned NUM_BLOCKS = NUM_BLOCKS
 ) (
     input logic clk,
 
@@ -37,7 +37,7 @@ module sram #(
     output logic [BLOCK_BITS-1:0] b_rdata
 );
 
-    logic [BLOCK_BITS-1:0] mem [NUM_CELLS];
+    logic [BLOCK_BITS-1:0] mem [NUM_BLOCKS];
 
     // Port A
     always_ff @(posedge clk) begin

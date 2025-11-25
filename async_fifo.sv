@@ -1,4 +1,4 @@
-// Async FIFO with variable sync depth
+// Async FIFO with variable sync stages
 
 module async_fifo #(
     parameter int DATA_WIDTH = 8,
