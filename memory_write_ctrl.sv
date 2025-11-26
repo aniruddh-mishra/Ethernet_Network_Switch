@@ -40,7 +40,8 @@ module memory_write_ctrl (
     logic [ADDR_W-1:0] curr_idx; // current block idx
     logic [ADDR_W-1:0] next_idx; // used for footer
 
-    assign data_ready_o = (state != WAIT_FIRST) && (state != WAIT_SECOND);
+    // not ready if waiting for frame allocation or actively writing to memory. 
+    assign data_ready_o = state == IDLE || state == WRITE_PAYLOAD;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin

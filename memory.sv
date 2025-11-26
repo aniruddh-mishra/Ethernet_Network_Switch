@@ -50,4 +50,4 @@ module sram #(
         if (b_we) mem[b_addr] <= b_wdata;
             b_rdata <= mem[b_addr];
     end
-endmodule : cell_sram
+endmodule
