@@ -277,13 +277,45 @@ always_comb begin
                     next_fifo_overflow_count = fifo_overflow_count + 1;
                     rx_next_state = WAIT_IFG; 
                 end
-            end else if (gmii_rx_er || (!gmii_rx_dv && byte_count < MIN_FRAME_SIZE) || (byte_count + 1 > MAX_FRAME_SIZE)) begin
-                // error during payload, dv deasserted early before min frame size, or exceeded max frame size
+                
                 next_frame_error = 1'b1;
                 rx_next_state = WAIT_IFG;
-            end else begin
-                // dv deasserted normally, move to FCS check
+            end else begin // first IFG cycle
+                // if error during payload, dv deasserted early before min frame size, or exceeded max frame size
+                if (gmii_rx_er || (!gmii_rx_dv && byte_count < MIN_FRAME_SIZE) || (byte_count + 1 > MAX_FRAME_SIZE)) next_frame_error = 1'b1;
+                // else if dv deasserted normally, move to FCS check
                 // next_fcs_byte_count = 0;
+                // completed FCS capture, check CRC
+                if (crc_reg != CRC32_CONSTANT) begin
+                    // CRC mismatch
+                    next_frame_error = 1'b1;
+                    // next_crc_valid = 1'b0;
+                    next_crc_error_count = crc_error_count + 1;
+                end 
+                // update debug ctrs - accumulate until full reset
+                next_rx_frame_count = rx_frame_count + 1;
+                if (next_frame_error) begin
+                    next_rx_error_count = rx_error_count + 1;
+                end
+                // else begin
+                //      next_crc_valid = 1'b1;
+                // end
+                /* 
+                    send metadata (error and length) to frame parser via FIFO
+                    NOTE: length needs up to 11 bits to cover 64 to 1518 bytes, so we must send over two cycles:
+                        cycle 1: send error + lower 7 bits of length
+                        cycle 2: send upper 4 bits of length, padded with zeros
+                    use eof as flag in FIFO to indicate metadata, eof=1, sof=0, valid=1
+                    NOTE: at this point, frame error is too late to be raised for fifo full errors
+                */
+                if (!fifo_full) begin
+                    next_fifo_wr_en = 1'b1;
+                    next_fifo_din = {1'b1, frame_error, byte_count[6:0]}; // eof=1, error, data = byte_count[6:0]
+                end else begin
+                    // next_frame_error = 1'b1;
+                    next_fifo_overflow_count = fifo_overflow_count + 1;
+                end
+                next_ifg_count = ifg_count + 1;
                 rx_next_state = WAIT_IFG;
             end
         end
@@ -328,38 +360,6 @@ always_comb begin
                 next_ifg_count = 0;
 
                 rx_next_state = IDLE;
-            end else if (ifg_count == 0) begin // first IFG cycle
-                // completed FCS capture, check CRC
-                if (crc_reg != CRC32_CONSTANT) begin
-                    // CRC mismatch
-                    next_frame_error = 1'b1;
-                    // next_crc_valid = 1'b0;
-                    next_crc_error_count = crc_error_count + 1;
-                end 
-                // update debug ctrs - accumulate until full reset
-                next_rx_frame_count = rx_frame_count + 1;
-                if (next_frame_error) begin
-                    next_rx_error_count = rx_error_count + 1;
-                end
-                // else begin
-                //      next_crc_valid = 1'b1;
-                // end
-                /* 
-                    send metadata (error and length) to frame parser via FIFO
-                    NOTE: length needs up to 11 bits to cover 64 to 1518 bytes, so we must send over two cycles:
-                        cycle 1: send error + lower 7 bits of length
-                        cycle 2: send upper 4 bits of length, padded with zeros
-                    use eof as flag in FIFO to indicate metadata, eof=1, sof=0, valid=1
-                    NOTE: at this point, frame error is too late to be raised for fifo full errors
-                */
-                if (!fifo_full) begin
-                    next_fifo_wr_en = 1'b1;
-                    next_fifo_din = {1'b1, frame_error, byte_count[6:0]}; // eof=1, error, data = byte_count[6:0]
-                end else begin
-                    // next_frame_error = 1'b1;
-                    next_fifo_overflow_count = fifo_overflow_count + 1;
-                end
-                next_ifg_count = ifg_count + 1;
             end else if (ifg_count == 1) begin // second IFG cycle
                 if (!fifo_full) begin
                     next_fifo_wr_en = 1'b1;
