@@ -5,8 +5,8 @@ module memory_write_ctrl (
     input logic clk,
     input logic rst_n,
 
-    // memory write data, 64 bit beats
-    input logic [63:0] data_i;
+    // memory write data, 1 byte / 8 bit beats
+    input logic [7:0] data_i;
     input logic data_valid_i,
     input logic data_begin_i,
     input logic data_end_i,
@@ -22,7 +22,8 @@ module memory_write_ctrl (
     output logic mem_addr_o,
     output logic [BLOCK_BITS-1:0] mem_wdata
 );
-    localparam int CELL_PAYLOAD_LAST_BEAT = 6; // (n + 1) * 8, 56 bytes for now
+    // block size is 64 bytes, beat size is 1 byte
+    // 56 bytes reserved for packet payload, 8 bytes for footer
 
     typedef enum logic [1:0] {IDLE, WRITE_PAYLOAD, WRITE_FOOTER} state_t;
 
@@ -40,8 +41,8 @@ module memory_write_ctrl (
     logic [ADDR_W-1:0] curr_idx; // current block idx
     logic [ADDR_W-1:0] next_idx; // used for footer
 
-    // not ready if waiting for frame allocation or actively writing to memory. 
-    assign data_ready_o = state == IDLE || state == WRITE_PAYLOAD;
+    // not ready if waiting for frame allocation
+    assign data_ready_o = state != WAIT;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -51,6 +52,7 @@ module memory_write_ctrl (
             curr_idx <= 0;
             next_idx <= 0;
             frame_allocated <= 0;
+            next_frame_allocated <= 0;
         end
         else begin
             state <= state_n;
@@ -75,25 +77,35 @@ module memory_write_ctrl (
                     next_frame_allocated <= 0;
                     beat_cnt <= 0;
 
-                    if (data_valid_i)
+                    if (data_valid_i && data_begin_i) begin
+                        beat_cnt <= 1;
                         payload_reg <= data_i;
+                    end
                 end
 
                 WRITE_PAYLOAD: begin                        
                     if (data_valid_i) begin
-                        payload_reg <= {payload_reg[PAYLOAD_BITS-64-1:0], data_i};
+                        payload_reg <= {payload_reg[PAYLOAD_BITS-8-1:0], data_i};
                         beat_cnt <= beat_cnt + 1;
                     end
                 end
 
                 WRITE_FOOTER: begin
                     footer.next_idx <= next_idx;
-                    footer.eop <= s_eop;
+                    footer.eop <= data_end_i;
                     footer.valid <= 1;
                     footer.rsvd <= 0;
 
                     if (!data_end_i) begin
-                        beat_cnt <= 3'd0;
+                        beat_cnt <= 0;
+                        frame_allocated <= 1; // next_idx already allocated;
+                        next_frame_allocated <= 0;
+                        curr_idx <= next_idx;
+
+                        if (data_valid_i) begin
+                            beat_cnt <= 1;
+                            payload_reg <= data_i;
+                        end
                     end
 
                     mem_addr <= curr_idx;
@@ -115,7 +127,7 @@ module memory_write_ctrl (
             end
 
             WRITE_PAYLOAD: begin
-                if (data_valid_i && (beat_cnt == CELL_PAYLOAD_LAST_BEAT))
+                if (data_valid_i && (beat_cnt == PAYLOAD_BYTES))
                     state_n = (frame_allocated && next_frame_allocated) ? WRITE_FOOTER : WAIT;
             end
 

@@ -3,7 +3,7 @@ package mem_pkg;
     parameter int unsigned NUM_BLOCKS = 4096; // number of memory cells
     localparam int unsigned ADDR_W = $clog2(NUM_BLOCKS); // ptr size
     localparam int unsigned FOOTER_BYTES = 8; // last 8 B of cell used to point to next cell
-    localparam int unsigned PAYLOAD_BYTES= BLOCK_BYTES-LINK_BYTES; // 56 B
+    localparam int unsigned PAYLOAD_BYTES= BLOCK_BYTES-FOOTER_BYTES; // 56 B
     localparam int unsigned BLOCK_BITS = BLOCK_BYTES*8;
 
     // footer layout: | next_idx | rsvd | valid | eop |
