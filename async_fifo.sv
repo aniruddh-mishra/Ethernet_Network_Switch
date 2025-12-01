@@ -38,7 +38,7 @@ module async_fifo #(
     logic [PTR_WIDTH-1:0] w_gray_rclk [SYNC_STAGES];
 
     // helper functions
-    function automatic logic [PTR_WIDTH-1:0] bin2gray (input logic [PTR_WIDTH-1] b);
+    function automatic logic [PTR_WIDTH-1:0] bin2gray (input logic [PTR_WIDTH-1:0] b);
         bin2gray = b ^ (b >> 1);
     endfunction
 
@@ -122,20 +122,22 @@ module async_fifo #(
 
     generate
         for (i = 0; i < SYNC_STAGES; i++) begin : g_sync_w2r
-            always ff @(posedge rclk or negedge rrst_n) begin
-                if (!rrst_n)
+            always_ff @(posedge rclk or negedge rrst_n) begin
+                if (!rrst_n) begin
                     w_gray_rclk[i] <= '0;
-            end else begin
-                if (i == 0)
-                    w_gray_rclk[i] <= w_gray;
-                else
-                    w_gray_rclk[i] <= w_gray_rclk[i - 1];
+                end
+                else begin
+                    if (i == 0)
+                        w_gray_rclk[i] <= w_gray;
+                    else
+                        w_gray_rclk[i] <= w_gray_rclk[i - 1];
+                end
             end
         end
     endgenerate
 
     // empty detectino uses last sync stage
     always_comb begin
-        r_empty = (w_gray_rclk[SYNC_STAGES-1] == r_gray)
+        r_empty = (w_gray_rclk[SYNC_STAGES-1] == r_gray);
     end
 endmodule

@@ -1,8 +1,7 @@
 // round robin memory arbiter
-import mem_pkg::*;
 
 module rr_mem_wr_arbiter #(
-     parameter int N
+     parameter int N=4
 ) (
     input logic clk,
     input logic rst_n,
@@ -18,6 +17,8 @@ module rr_mem_wr_arbiter #(
     output logic [ADDR_W-1:0] mem_addr_o,
     output logic [BLOCK_BITS-1:0] mem_wdata_o
 );
+    import mem_pkg::*;
+
     logic [$clog2(N)-1:0] cur;
 
     assign mem_we_o = mem_we_i[cur];

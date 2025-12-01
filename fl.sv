@@ -1,7 +1,6 @@
 // free list
-import mem_pkg::*;
 
-module free_list (
+module fl (
     input logic clk,
     input logic rst_n,
 
@@ -14,21 +13,21 @@ module free_list (
     input logic free_req_i,
     input logic [$clog2(NUM_BLOCKS)-1:0] free_block_idx_i
 );
-
-    logic [BLOCK_BITS-1:0] stack [NUM_BLOCKS+1];
+    import mem_pkg::*;
+    logic [ADDR_W-1:0] stack [NUM_BLOCKS+1];
     logic [$clog2(NUM_BLOCKS+1)-1:0] sp;
     // sp points to top of stack
 
     logic empty, full;
     assign empty = sp == 0;
-    assign full = sp == NUM_BLOCKS;
+    assign full = {19'b0, sp} == NUM_BLOCKS;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            sp <= NUM_BLOCKS;
+            sp <= NUM_BLOCKS[$clog2(NUM_BLOCKS+1)-1:0];
             // 0th entry unused
             for (int i = 0; i <= NUM_BLOCKS; i++) begin
-                stack[i] <= i;
+                stack[i] <= i[11:0];
             end
         end
         else begin

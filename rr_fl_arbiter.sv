@@ -1,7 +1,5 @@
-import mem_pkg::*;
-
-module rr_mem_wr_arbiter #(
-     parameter int N
+module rr_fl_arbiter #(
+     parameter int N=4
 ) (
     input logic clk,
     input logic rst_n,
@@ -20,19 +18,20 @@ module rr_mem_wr_arbiter #(
     input logic fl_alloc_gnt_i,
     input logic [ADDR_W-1:0] fl_alloc_block_idx_i
 );
+    import mem_pkg::*;
+
     logic [$clog2(N)-1:0] cur;
     logic [N-1:0] local_fl_alloc_req;
 
     assign fl_alloc_req_o = fl_alloc_req_i[cur];
+    assign fl_alloc_block_idx_o[cur] = fl_alloc_block_idx_i;
     
     always_comb begin
-        fl_alloc_gnt_o = 0;
-        fl_alloc_block_idx_o = 0;
+        fl_alloc_gnt_o = 0; 
 
-        if (local_fl_alloc_req[cur]) begin
+        if (local_fl_alloc_req[cur])
             fl_alloc_gnt_o[cur] = fl_alloc_gnt_i;
-            fl_alloc_block_idx_o[cur] = fl_alloc_block_idx_i;
-        end
+        
     end
 
     always_ff @(posedge clk or negedge rst_n) begin
