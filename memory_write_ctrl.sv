@@ -17,9 +17,10 @@ module memory_write_ctrl (
     input logic fl_alloc_gnt,
     input logic [ADDR_W-1:0] fl_alloc_block_idx_i,
 
-    // dual port memory, write will use port a
+    // to memory
+    input logic mem_ready_i, // memory controller ready
     output logic mem_we_o,
-    output logic mem_addr_o,
+    output logic [ADDR_W-1:0] mem_addr_o,
     output logic [BLOCK_BITS-1:0] mem_wdata
 );
     // block size is 64 bytes, beat size is 1 byte
@@ -41,6 +42,8 @@ module memory_write_ctrl (
     logic [ADDR_W-1:0] curr_idx; // current block idx
     logic [ADDR_W-1:0] next_idx; // used for footer
 
+    logic mem_ready; // cycle delayed
+
     // not ready if waiting for frame allocation
     assign data_ready_o = state != WAIT;
 
@@ -53,9 +56,11 @@ module memory_write_ctrl (
             next_idx <= 0;
             frame_allocated <= 0;
             next_frame_allocated <= 0;
+            mem_ready <= 0;
         end
         else begin
             state <= state_n;
+            mem_ready <= mem_ready_i;
 
             mem_we_o <= 0;
             mem_addr_o <= 0;
@@ -91,26 +96,28 @@ module memory_write_ctrl (
                 end
 
                 WRITE_FOOTER: begin
-                    footer.next_idx <= next_idx;
-                    footer.eop <= data_end_i;
-                    footer.valid <= 1;
-                    footer.rsvd <= 0;
+                    if (mem_ready_i) begin
+                        footer.next_idx <= next_idx;
+                        footer.eop <= data_end_i;
+                        footer.valid <= 1;
+                        footer.rsvd <= 0;
 
-                    if (!data_end_i) begin
-                        beat_cnt <= 0;
-                        frame_allocated <= 1; // next_idx already allocated;
-                        next_frame_allocated <= 0;
-                        curr_idx <= next_idx;
+                        if (!data_end_i) begin
+                            beat_cnt <= 0;
+                            frame_allocated <= 1; // next_idx already allocated;
+                            next_frame_allocated <= 0;
+                            curr_idx <= next_idx;
 
-                        if (data_valid_i) begin
-                            beat_cnt <= 1;
-                            payload_reg <= data_i;
+                            if (data_valid_i) begin
+                                beat_cnt <= 1;
+                                payload_reg <= data_i;
+                            end
                         end
-                    end
 
-                    mem_addr <= curr_idx;
-                    mem_wdata <= { payload_reg , footer };
-                    mem_we <= 1'b1;
+                        mem_addr <= curr_idx;
+                        mem_wdata <= { payload_reg , footer };
+                        mem_we <= 1'b1;
+                    end
                 end
             endcase
         end
@@ -137,7 +144,8 @@ module memory_write_ctrl (
             end
 
             WRITE_FOOTER: begin
-                state_n = data_end_i ? IDLE : WRITE_PAYLOAD;
+                if (mem_ready) // mem transaction success
+                    state_n = data_end_i ? IDLE : WRITE_PAYLOAD;
                 // TODO: FIX SINGLE FRAME LEAK IF WE GO TO IDLE STATE (LOW PRIORITY)
             end
         endcase
