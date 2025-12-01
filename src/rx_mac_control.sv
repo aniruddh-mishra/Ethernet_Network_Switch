@@ -19,7 +19,7 @@ module rx_mac_control (
     output logic frame_valid, // high for every cycle data is valid
     input logic frame_grant, // from mem
     output logic frame_sof, // single high start of frame - set on first valid data outputted
-    output logic frame_eof, // single high end of frame - follows after last data/FCS byte
+    output logic frame_eof, // single high end of frame - follows after last data/FCS byte - implicitly handles FIFO_full too which drops bytes
     output logic frame_error, // high at eof if CRC or other error
 );
 
@@ -57,9 +57,9 @@ async_fifo cdc_fifo (
 );
 
 // output state machine (switch clk domain) - comb logic 
-typedef enum logic [1:0] {OUT_IDLE, OUT_PREAMBLE, OUT_HEADER, OUT_PAYLOAD} out_state_t;
+typedef enum logic [1:0] {IDLE, PREAMBLE, HEADER, PAYLOAD} state_t;
 
-out_state_t out_current_state, out_next_state;
+state_t current_state, next_state;
 
 logic [31:0] crc_reg, next_crc_reg;
 logic [4:0] preamble_header_ctr, next_preamble_header_ctr; // preamble = 8 bytes, header = 6 + 6 + 2 bytes, total = 22 bytes
@@ -89,11 +89,10 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         gmii_rx_er_sync <= {gmii_rx_er_sync[0], gmii_rx_er};
     end
 end
-logic rx_dv_flag; // sticky flag for dv during frame
 
 always_comb begin
     // default values
-    out_next_state = out_current_state;
+    next_state = current_state;
     fifo_rd_en = 1'b0; // default false
     next_crc_reg = crc_reg;
     next_preamble_header_ctr = preamble_header_ctr;
@@ -102,37 +101,36 @@ always_comb begin
     next_frame_eof = 1'b0; next_frame_sof = 1'b0; // default false
     next_frame_error = rx_er || frame_error; // sticky error during frame
 
-    case (out_current_state)
-        OUT_IDLE: begin // assume IFG is not violated from sender
+    case (current_state)
+        IDLE: begin // assume IFG is not violated from sender
             next_crc_reg = 32'hFFFFFFFF;
             next_frame_error = 1'b0; // resets frame error which stays high during frame
-            rx_dv_flag = 1'b0; // reset sticky flag
             if (!fifo_empty) fifo_rd_en = 1'b1; 
             if (prev_fifo_rd_en) begin
                 if (fifo_dout == PREAMBLE_BYTE) begin
                     next_preamble_header_ctr = 1; // resets ctr
-                    out_next_state = OUT_PREAMBLE;
+                    next_state = PREAMBLE;
                 end
             end
         end
-        OUT_PREAMBLE: begin
+        PREAMBLE: begin
             if (!fifo_empty) fifo_rd_en = 1'b1;
             if (prev_fifo_rd_en) begin
                 if (preamble_header_ctr == 7) begin
                     if (fifo_dout == SFD_BYTE) begin 
                         next_preamble_header_ctr = preamble_header_ctr + 1;
                         next_frame_sof = 1'b1;
-                        out_next_state = OUT_HEADER;
+                        next_state = HEADER;
                     end else begin
-                        out_next_state = OUT_IDLE; // invalid SFD byte, go back to IDLE
+                        next_state = IDLE; // invalid SFD byte, go back to IDLE
                     end
                 end else begin
                     if (fifo_dout == PREAMBLE_BYTE) next_preamble_header_ctr = preamble_header_ctr + 1;
-                    else out_next_state = OUT_IDLE; // invalid preamble byte, go back to IDLE
+                    else next_state = IDLE; // invalid preamble byte, go back to IDLE
                 end
             end
         end
-        OUT_HEADER: begin // parse header bytes for MAC addresses
+        HEADER: begin // parse header bytes for MAC addresses
             if (!fifo_empty && frame_grant) fifo_rd_en = 1'b1;
             if (prev_fifo_rd_en) begin
                 next_crc_reg = crc32_next(fifo_dout, crc_reg);
@@ -145,19 +143,19 @@ always_comb begin
                 // else if (preamble_header_ctr < 22) begin // ignore mac_type for now
                 //     next_mac_type = {mac_type[0], fifo_dout};
                 // end
+                if (preamble_header_ctr == 21) next_state = PAYLOAD;
                 next_preamble_header_ctr = preamble_header_ctr + 1;
                 next_frame_data = fifo_dout;
                 next_frame_valid = 1'b1;
             end
         end
-        OUT_PAYLOAD: begin // assume frame fits within max and min bytes + follows IFG
+        PAYLOAD: begin // assume frame fits within max and min bytes + follows IFG
             if (!fifo_empty && frame_grant) fifo_rd_en = 1'b1;
-            if (!rx_dv) rx_dv_flag = 1'b1; // set sticky flag when dv goes low
             if (prev_fifo_rd_en) begin
                 next_crc_reg = crc32_next(fifo_dout, crc_reg);
                 next_frame_data = fifo_dout;
                 next_frame_valid = 1'b1;
-            end else if (rx_dv_flag) begin // sender has finished sending frame + we have read all data
+            end else if (!rx_dv) begin // sender has finished sending frame + we have read all data
                 if (crc_reg != CRC32_CONSTANT) begin
                     next_frame_error = 1'b1; // allow payload to cut through, perform CRC calculations as data arrives, flag error at end
                     // update debug ctrs
@@ -165,18 +163,18 @@ always_comb begin
                     next_rx_error_count = rx_error_count + 1;
                 end
                 next_frame_eof = 1'b1;
-                out_next_state = OUT_IDLE;
+                next_state = IDLE;
                 next_rx_frame_count = rx_frame_count + 1; // update debug ctrs
             end
         end
-        default: out_next_state = OUT_IDLE;
+        default: next_state = IDLE;
     endcase
 end
 
 // output state machine (switch clk domain) - seq logic 
 always_ff @(posedge switch_clk or negedge switch_rst_n) begin
     if (!switch_rst_n) begin
-        out_current_state <= OUT_IDLE;
+        current_state <= IDLE;
         prev_fifo_rd_en <= 0;
         frame_data <= 0;
         frame_eof <= 0;
@@ -190,20 +188,23 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         rx_frame_count <= 0;
         fifo_underflow_count <= 0;
     end else begin
-        if (frame_grant) begin // freeze current data if mem or addr learning is backed up
-            out_current_state <= out_next_state;
-            prev_fifo_rd_en <= fifo_rd_en;
-            frame_data <= next_frame_data;
-            frame_eof <= next_frame_eof;
-            frame_sof <= next_frame_sof;
-            frame_valid <= next_frame_valid;
-            frame_error <= next_frame_error;
-            
-            // debug
-            crc_error_count <= next_crc_error_count;
-            rx_error_count <= next_rx_error_count;
-            rx_frame_count <= next_rx_frame_count;
-            
+        if (frame_grant && ((current_state != IDLE) || (current_state != PREAMBLE))) begin // freeze current data if mem is backed up during data sending (header/payload)
+            if (!rx_dv) begin
+                current_state <= IDLE; // if frame ended while mem backlogged, reset to IDLE
+            end else begin
+                current_state <= next_state;
+                prev_fifo_rd_en <= fifo_rd_en;
+                frame_data <= next_frame_data;
+                frame_eof <= next_frame_eof;
+                frame_sof <= next_frame_sof;
+                frame_valid <= next_frame_valid;
+                frame_error <= next_frame_error;
+                
+                // debug
+                crc_error_count <= next_crc_error_count;
+                rx_error_count <= next_rx_error_count;
+                rx_frame_count <= next_rx_frame_count;
+            end
         end
 
         if (fifo_empty) fifo_underflow_count <= fifo_underflow_count + 1;
