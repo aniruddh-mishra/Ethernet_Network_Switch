@@ -19,10 +19,12 @@ module memory_write_ctrl (
     input logic mem_ready_i, // memory controller ready
     output logic mem_we_o,
     output logic [ADDR_W-1:0] mem_addr_o,
-    output logic [BLOCK_BITS-1:0] mem_wdata_o
+    output logic [BLOCK_BITS-1:0] mem_wdata_o,
+
+    // to arb
+    output logic [ADDR_W-1:0] start_addr_o
 );
     import mem_pkg::*;
-    
     typedef enum logic [1:0] {IDLE, WRITE_PAYLOAD, WAIT, WRITE_FOOTER} state_t;
 
     logic frame_allocated;
@@ -41,8 +43,12 @@ module memory_write_ctrl (
 
     logic mem_trans_success; // cycle delayed
 
+    logic start_addr;
+    logic [ADDR_W-1:0] frame_cnt;
+
     // not ready if waiting for frame allocation
     assign data_ready_o = state != WAIT && !(state == WRITE_FOOTER && !mem_trans_success);
+    assign start_addr_o = start_addr;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -53,11 +59,13 @@ module memory_write_ctrl (
             next_idx <= 0;
             frame_allocated <= 0;
             next_frame_allocated <= 0;
-            mem_ready <= 0;
+            mem_trans_success <= 0;
+            start_addr <= 0;
+            frame_cnt <= 0;
         end
         else begin
             state <= state_n;
-            mem_ready <= mem_ready_i;
+            mem_trans_success <= mem_ready_i;
 
             mem_we_o <= 0;
             mem_addr_o <= 0;
@@ -67,6 +75,8 @@ module memory_write_ctrl (
                 if (!frame_allocated && fl_alloc_gnt) begin
                     curr_idx <= fl_alloc_block_idx_i;
                     frame_allocated <= 1;
+                    if (frame_cnt == 0)
+                        start_addr <= fl_alloc_block_idx_i;
                 end
                 if (frame_allocated && !next_frame_allocated && fl_alloc_gnt) begin
                     next_idx <= fl_alloc_block_idx_i;
@@ -79,6 +89,7 @@ module memory_write_ctrl (
                     frame_allocated <= 0;
                     next_frame_allocated <= 0;
                     beat_cnt <= 0;
+                    frame_cnt <= 0;
 
                     if (data_valid_i && data_begin_i) begin
                         beat_cnt <= 1;
@@ -118,6 +129,7 @@ module memory_write_ctrl (
                         mem_addr_o <= curr_idx;
                         mem_wdata_o <= { payload_reg , footer };
                         mem_we_o <= 1'b1;
+                        frame_cnt <= frame_cnt + 1;
                     end
                 end
             endcase
