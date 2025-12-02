@@ -25,9 +25,6 @@ module memory_write_ctrl (
     output logic [ADDR_W-1:0] start_addr_o
 );
     import mem_pkg::*;
-    // block size is 64 bytes, beat size is 1 byte
-    // 62 bytes reserved for packet payload, 2 bytes for footer
-    localparam int PAYLOAD_BITS = 8 * PAYLOAD_BYTES;
 
     typedef enum logic [1:0] {IDLE, WRITE_PAYLOAD, WAIT, WRITE_FOOTER} state_t;
 
