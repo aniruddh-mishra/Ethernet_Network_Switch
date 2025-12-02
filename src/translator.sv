@@ -27,7 +27,7 @@ always_ff @(posedge clk, negedge rst_n) begin
                 write_reqs_o[address_port_i] <= 1'b1;
                 start_ptrs_o[address_port_i] <= start_ptr_o;
             end else begin
-                for (int i = 0; i < NUM_PORTS; i = i+1) begin // Flooding
+                for (int i = 0; i < NUM_PORTS; i = i+1) begin // Flooding TODO: Remove the flooding to ingress port
                     write_reqs_o[i] <= 1'b1;
                     start_ptrs_o[i] <= start_ptr_o;
                 end
