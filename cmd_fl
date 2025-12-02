@@ -5,7 +5,6 @@
 
 -sverilog
 
-
 // -y with folder, which contains source files
 -y Ethernet_Network_Switch/src
 -y Ethernet_Network_Switch/packages
@@ -15,10 +14,10 @@
 +libext+.sv+.svh+.v
 
 // List your files here -------------
+packages/switch_pkg.svh
 packages/rx_tx_pkg.svh
 packages/mem_pkg.svh
 packages/address_table_pkg.svh
-packages/switch_pkg.svh
 packages/voq_pkg.svh
 
 src/switch.sv
