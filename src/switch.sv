@@ -1,7 +1,7 @@
+import switch_pkg::*;
 import address_table_pkg::*;
 import mem_pkg::*;
 import rx_tx_pkg::*;
-import switch_pkg::*;
 import voq_pkg::*;
 
 module switch (
