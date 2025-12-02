@@ -1,6 +1,3 @@
-`ifndef RX_TX_PKG
-`define RX_TX_PKG
-
 package rx_tx_pkg;
     // rx module parameters
     localparam DATA_WIDTH = 8;
@@ -84,5 +81,3 @@ module clk_div #(parameter DIVIDE = 4)(input logic clk_in, input logic rst_n, ou
         end
     end
 endmodule
-
-`endif

@@ -1,5 +1,3 @@
-// include sync + clk_div modules
-`include "rx_tx_pkg.svh"
 // import params and crc32 function
 import rx_tx_pkg::*;
 
