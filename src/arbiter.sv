@@ -1,5 +1,3 @@
-import mem_pkg::*;
-
 module arbiter #(
     parameter int NUM_PORTS = 4
 ) (

@@ -1,5 +1,3 @@
-import mem_pkg::*;
-
 module memory_write_ctrl (
     input logic clk,
     input logic rst_n,

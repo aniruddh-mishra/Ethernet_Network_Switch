@@ -1,6 +1,3 @@
-import mem_pkg::*;
-import voq_pkg::*;
-
 module voq (
     input logic clk, rst_n,
     input logic write_req_i,

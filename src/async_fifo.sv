@@ -1,5 +1,3 @@
-import mem_pkg::*;
-
 module async_fifo #(
     parameter int ADDR_WIDTH = 4,
     parameter int SYNC_STAGES = 2

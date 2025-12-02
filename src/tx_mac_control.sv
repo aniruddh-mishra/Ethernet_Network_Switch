@@ -1,6 +1,3 @@
-// import params and crc32 function
-import rx_tx_pkg::*;
-
 module tx_mac_control (
     // GMII interface
     output logic gmii_tx_clk_o,

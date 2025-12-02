@@ -1,5 +1,3 @@
-import mem_pkg::*;
-
 module fl (
     input logic clk,
     input logic rst_n,

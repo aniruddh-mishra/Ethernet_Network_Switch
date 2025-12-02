@@ -1,5 +1,3 @@
-import mem_pkg::*;
-
 module translator #(
     parameter int NUM_PORTS = 4
 ) (

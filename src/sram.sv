@@ -1,5 +1,3 @@
-import mem_pkg::*;
-
 module sram (
     input logic clk,
 

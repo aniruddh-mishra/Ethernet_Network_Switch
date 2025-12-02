@@ -1,6 +1,3 @@
-import address_table_pkg::*;
-import mem_pkg::*;
-
 module address_table #(
     parameter int NUM_PORTS = 4
 )(
