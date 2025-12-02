@@ -29,6 +29,7 @@ src/arbiter.sv
 src/sram.sv
 src/async_fifo.sv
 src/memory_write_ctrl.sv
+src/mac_controllers.sv
 src/voq.sv
 
 tests/tb_switch.sv
