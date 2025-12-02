@@ -1,7 +1,6 @@
 package mem_pkg;
     parameter int unsigned BLOCK_BYTES = 64; // cell size bytes
     parameter int unsigned NUM_BLOCKS = 4096; // number of memory cells
-    parameter int unsigned DATA_WIDTH = 8;
     localparam int unsigned ADDR_W = $clog2(NUM_BLOCKS); // ptr size
     localparam int unsigned FOOTER_BYTES = 2; // last 8 B of cell used to point to next cell
     localparam int unsigned PAYLOAD_BYTES= BLOCK_BYTES-FOOTER_BYTES; // 56 B
