@@ -14,17 +14,6 @@ module tb_switch();
     logic gmii_rx_dv_i [NUM_PORTS-1:0];
     logic gmii_rx_er_i [NUM_PORTS-1:0];
 
-    // tx outputs (unused here)
-    logic gmii_tx_clk_o [NUM_PORTS-1:0];
-    logic [DATA_WIDTH-1:0] gmii_tx_data_o [NUM_PORTS-1:0];
-    logic gmii_tx_en_o [NUM_PORTS-1:0];
-    logic gmii_tx_er_o [NUM_PORTS-1:0];
-
-    // debug outputs
-    logic debug_learn_valid;
-    logic [47:0] debug_learn_address;
-    logic [$clog2(NUM_PORTS)-1:0] debug_learn_port;
-
     // instantiate DUT
     switch uut (
         .switch_clk(switch_clk),
@@ -32,14 +21,7 @@ module tb_switch();
         .gmii_rx_clk_i(gmii_rx_clk_i),
         .gmii_rx_data_i(gmii_rx_data_i),
         .gmii_rx_dv_i(gmii_rx_dv_i),
-        .gmii_rx_er_i(gmii_rx_er_i),
-        .gmii_tx_clk_o(gmii_tx_clk_o),
-        .gmii_tx_data_o(gmii_tx_data_o),
-        .gmii_tx_en_o(gmii_tx_en_o),
-        .gmii_tx_er_o(gmii_tx_er_o),
-        .debug_learn_valid(debug_learn_valid),
-        .debug_learn_address(debug_learn_address),
-        .debug_learn_port(debug_learn_port)
+        .gmii_rx_er_i(gmii_rx_er_i)
     );
 
     // clock generation
@@ -80,13 +62,6 @@ module tb_switch();
 
         $display("Testbench complete, finishing simulation.");
         #100 $finish;
-    end
-
-    // monitor learning events
-    always @(posedge switch_clk) begin
-        if (debug_learn_valid) begin
-            $display("[TB] Learned address %012h on port %0d at time %0t", debug_learn_address, debug_learn_port, $time);
-        end
     end
 
     // task to send a simple Ethernet-like frame on a port: preamble(7x0x55) + SFD + dst(6) + src(6) + type(2) + 4 bytes payload
