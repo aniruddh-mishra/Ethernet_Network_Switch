@@ -1,4 +1,4 @@
-// free list
+import mem_pkg::*;
 
 module fl (
     input logic clk,
@@ -13,7 +13,7 @@ module fl (
     input logic free_req_i,
     input logic [$clog2(NUM_BLOCKS)-1:0] free_block_idx_i
 );
-    import mem_pkg::*;
+    
     logic [ADDR_W-1:0] stack [NUM_BLOCKS+1];
     logic [$clog2(NUM_BLOCKS+1)-1:0] sp;
     // sp points to top of stack

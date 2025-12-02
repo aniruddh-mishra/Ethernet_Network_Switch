@@ -1,4 +1,5 @@
 `timescale 1ns/1ps
+
 module tb_switch();
     import switch_pkg::*;
     import rx_tx_pkg::*;

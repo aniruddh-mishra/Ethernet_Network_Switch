@@ -1,4 +1,5 @@
-// memory write controller
+import mem_pkg::*;
+
 module memory_write_ctrl (
     input logic clk,
     input logic rst_n,
@@ -24,7 +25,6 @@ module memory_write_ctrl (
     // to arb
     output logic [ADDR_W-1:0] start_addr_o
 );
-    import mem_pkg::*;
     typedef enum logic [1:0] {IDLE, WRITE_PAYLOAD, WAIT, WRITE_FOOTER} state_t;
 
     logic frame_allocated;

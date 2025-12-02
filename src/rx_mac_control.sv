@@ -1,3 +1,4 @@
+import rx_tx_pkg::*;
 
 module rx_mac_control (
     // GMII interface
@@ -20,8 +21,6 @@ module rx_mac_control (
     output logic frame_eof_o, // single high end of frame - follows after last data/FCS byte - implicitly handles FIFO_full too which drops bytes
     output logic frame_error_o // high at eof if CRC or other error
 );
-// import params and crc32 function
-import rx_tx_pkg::*;
 
 // status and debug signals (simulation only)
 logic [31:0] crc_error_count; // # of frames with CRC errors

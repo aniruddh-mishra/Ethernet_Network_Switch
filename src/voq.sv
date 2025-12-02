@@ -1,3 +1,6 @@
+import mem_pkg::*;
+import voq_pkg::*;
+
 module voq (
     input logic clk, rst_n,
     input logic write_req_i,
@@ -6,9 +9,6 @@ module voq (
     output logic [ADDR_W-1:0] ptr_o,
     output logic ptr_valid_o
 );
-
-import mem_pkg::*;
-import voq_pkg::*;
 
 typedef enum logic[1:0] {STATE_EMPTY, STATE_NORMAL, STATE_FULL} state_t;
 

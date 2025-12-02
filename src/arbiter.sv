@@ -1,4 +1,4 @@
-// arbiter
+import mem_pkg::*;
 
 module arbiter #(
     parameter int NUM_PORTS = 4
@@ -50,7 +50,6 @@ module arbiter #(
     output logic eop_o
     //// Address learn table arbitration ////
 );
-    import mem_pkg::*;
     logic [$clog2(NUM_PORTS)-1:0] cur;
 
      //// Memory write port arbitration ////

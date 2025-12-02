@@ -1,3 +1,9 @@
+import address_table_pkg::*;
+import mem_pkg::*;
+import rx_tx_pkg::*;
+import switch_pkg::*;
+import voq_pkg::*;
+
 module switch (
     input switch_clk, rst_n,
     
@@ -13,13 +19,6 @@ module switch (
     // output logic gmii_tx_en_o [NUM_PORTS-1:0],
     // output logic gmii_tx_er_o [NUM_PORTS-1:0]
 );
-
-// Packages
-import address_table_pkg::*;
-import mem_pkg::*;
-import rx_tx_pkg::*;
-import switch_pkg::*;
-import voq_pkg::*;
 
 // RX Module Signals
 logic [47:0] ingress_dst_addrs [NUM_PORTS-1:0];

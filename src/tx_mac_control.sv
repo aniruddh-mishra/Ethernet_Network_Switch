@@ -1,3 +1,5 @@
+// import params and crc32 function
+import rx_tx_pkg::*;
 
 module tx_mac_control (
     // GMII interface
@@ -20,8 +22,6 @@ module tx_mac_control (
     input logic [$clog2(VOQ_DEPTH)-1:0] voq_ptr_i,
     output logic voq_ready_o // always high when ready to start frame
 );
-// import params and crc32 function
-import rx_tx_pkg::*;
 
 // status and debug signals (simulation only)
 logic [31:0] tx_frame_count; // # of frames transmitted

@@ -1,4 +1,5 @@
-// simple 2 port sram cell, 1 clk latency
+import mem_pkg::*;
+
 module sram (
     input logic clk,
 
@@ -11,7 +12,6 @@ module sram (
     input logic [ADDR_W-1:0] r_addr_i,
     output logic [BLOCK_BITS-1:0] r_data_o
 );
-    import mem_pkg::*;
 
     logic [BLOCK_BITS-1:0] mem [NUM_BLOCKS-1:0];
 
