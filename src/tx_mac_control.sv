@@ -1,10 +1,5 @@
-// import params and crc32 function
-import rx_tx_pkg::*;
 
-module tx_mac_control #(
-    parameter DATA_WIDTH = 8,
-    parameter VOQ_DEPTH = 8
-)(
+module tx_mac_control (
     // GMII interface
     output logic gmii_tx_clk_o,
     output logic [DATA_WIDTH-1:0] gmii_tx_data_o,
@@ -25,6 +20,8 @@ module tx_mac_control #(
     input logic voq_valid_i, // indicates VOQ has valid start ptr
     input logic [$clog2(VOQ_DEPTH)-1:0] voq_ptr_i
 );
+// import params and crc32 function
+import rx_tx_pkg::*;
 
 // status and debug signals (simulation only)
 logic [31:0] tx_frame_count; // # of frames transmitted
@@ -42,21 +39,16 @@ clk_div #(
 
 // FIFO signals for CDC (switch clk -> GMII)
 logic [DATA_WIDTH-1:0] fifo_din; // continous only 
-logic [DATA_WIDTH-1:0] fifo_dout;
 logic fifo_wr_en;
 logic fifo_full; logic fifo_empty;
-logic fifo_rd_en; assign fifo_rd_en = !fifo_empty; // constantly read in gmii domain
+logic fifo_rd_en;
 
 // sync switch clk reset to gmii/PHY clk
 logic sync_switch_rst_n;
 synchronizer sync_rst(gmii_tx_clk_o, switch_rst_n, sync_switch_rst_n);
 
 // CDC FIFO instance (async FIFO)
-async_fifo #(
-    .DATA_WIDTH(DATA_WIDTH) // just data
-    // default addr_width 4 = 16 depth
-    // default 2 sync stages
-) cdc_fifo (
+async_fifo cdc_fifo (
     .wclk(switch_clk),
     .wrst_n(switch_rst_n),
     .w_en(fifo_wr_en),
@@ -90,12 +82,14 @@ always_comb begin
     fifo_wr_en = 1'b0;
     next_voq_ready_o = 1'b0;
     next_tx_frame_count = tx_frame_count;
+    fifo_din = 0; // default data
+    mem_ptr_o = 0; // default ptr
 
     case (current_state)
         IDLE: begin
             next_preamble_ctr = 0;
             next_IFG_ctr = 0;
-            if (!voq_ready_o) next_voq_ready_o = 1'b1;
+            if (!voq_valid_i) next_voq_ready_o = 1'b1;
             else begin
                 mem_ptr_o = voq_ptr_i;
                 next_state = PREAMBLE;
@@ -127,6 +121,7 @@ always_comb begin
         IFG: begin // maintain 12-byte IFG
             next_IFG_ctr = IFG_ctr + 1;
             if (IFG_ctr == 11) begin
+                next_voq_ready_o = 1'b1;
                 next_state = IDLE;
             end
         end

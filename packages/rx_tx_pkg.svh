@@ -2,6 +2,9 @@ package rx_tx_pkg;
     // rx module parameters
     localparam DATA_WIDTH = 8;
 
+    // tx params
+    localparam VOQ_DEPTH = 8;
+
     // ethernet standards
     localparam PREAMBLE_BYTE = 8'h55; // repeated for 7 bytes
     localparam SFD_BYTE = 8'hD5; // 1 byte after preamble
@@ -12,8 +15,8 @@ package rx_tx_pkg;
         46 to 1500-byte data
         4-byte FCS 
     */
-    localparam MIN_FRAME_SIZE = 64;
-    localparam MAX_FRAME_SIZE = 1518; // 1522 if including VLAN tag
+    // localparam MIN_FRAME_SIZE = 64;
+    // localparam MAX_FRAME_SIZE = 1518; // 1522 if including VLAN tag
     localparam CRC32_POLY_REFLECTED = 32'hEDB88320; // non-reflected polynomial: 32'h04C11DB7
     /* 
         when including FCS in the CRC calculation (since it would be difficult to exclude the FCS bytes themselves without sacrificing speed), the CRC of the entire frame (data + FCS) should equal 0xC704DD7B
@@ -48,6 +51,7 @@ package rx_tx_pkg;
     endfunction
 endpackage
 
+/* verilator lint_off DECLFILENAME */
 module synchronizer (input logic clk, input logic rst_n_in, output logic rst_n_out);
     logic sync_ff1, sync_ff2;
 
@@ -64,19 +68,21 @@ module synchronizer (input logic clk, input logic rst_n_in, output logic rst_n_o
     assign rst_n_out = sync_ff2;
 endmodule
 
-module clk_div #(parameter DIVIDE = 4)(input logic clk_in, input logic rst_n, output logic clk_out);
-    logic [$clog2(DIVIDE)-1:0] div_ff;
+/* verilator lint_off DECLFILENAME */
+module clk_div #(parameter int DIVIDE = 4)(input logic clk_in, input logic rst_n, output logic clk_out);
+    logic [$clog2(DIVIDE)-1:0] div_ctr, div_ff;
+    assign div_ff = DIVIDE[1:0];
 
     always_ff @(posedge clk_in or negedge rst_n) begin
         if (!rst_n) begin
             div_ff <= 0;
             clk_out <= 0;
         end else begin
-            if (div_ff == (DIVIDE/2 - 1)) begin
+            if (div_ctr == ((div_ff>>1) - 1)) begin
                 clk_out <= ~clk_out;
-                div_ff <= 0;
+                div_ctr <= 0;
             end else begin
-                div_ff <= div_ff + 1;
+                div_ctr <= div_ctr + 1;
             end
         end
     end

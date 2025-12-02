@@ -1,5 +1,3 @@
-// import params and crc32 function
-import rx_tx_pkg::*;
 
 module rx_mac_control (
     // GMII interface
@@ -22,6 +20,8 @@ module rx_mac_control (
     output logic frame_eof_o, // single high end of frame - follows after last data/FCS byte - implicitly handles FIFO_full too which drops bytes
     output logic frame_error_o // high at eof if CRC or other error
 );
+// import params and crc32 function
+import rx_tx_pkg::*;
 
 // status and debug signals (simulation only)
 logic [31:0] crc_error_count; // # of frames with CRC errors
@@ -31,7 +31,6 @@ logic [31:0] fifo_overflow_count; // # of times FIFO was full when trying to wri
 logic [31:0] fifo_underflow_count; // # of times FIFO was empty when trying to read in eof metadata state - switch clk domain
 
 // FIFO signals for CDC (GMII -> switch clk)
-logic [DATA_WIDTH-1:0] fifo_din, next_fifo_din; // only data, no eof/sof
 logic [DATA_WIDTH-1:0] fifo_dout;
 logic fifo_rd_en; // continuous signal, no reg
 logic fifo_full;
@@ -39,7 +38,7 @@ logic fifo_empty;
 
 // sync switch clk reset to gmii/PHY clk
 logic sync_switch_rst_n;
-synchronizer(gmii_rx_clk_i, switch_rst_n, sync_switch_rst_n);
+synchronizer sync_rst(gmii_rx_clk_i, switch_rst_n, sync_switch_rst_n);
 
 // CDC FIFO instance (async FIFO)
 async_fifo cdc_fifo (
@@ -99,6 +98,12 @@ always_comb begin
     next_frame_data_o = frame_data_o; next_frame_valid_o = frame_valid_o;
     next_frame_eof_o = 1'b0; next_frame_sof_o = 1'b0; // default false
     next_frame_error_o = rx_er || frame_error_o; // sticky error during frame
+    
+    // debug
+    next_crc_error_count = crc_error_count;
+    next_rx_error_count = rx_error_count;
+    next_rx_frame_count = rx_frame_count;
+
 
     case (current_state)
         IDLE: begin // assume IFG is not violated from sender
@@ -204,6 +209,7 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
                 preamble_header_ctr <= next_preamble_header_ctr;
                 mac_dst_addr_o <= next_mac_dst_addr_o;
                 mac_src_addr_o <= next_mac_src_addr_o;
+                crc_reg <= next_crc_reg;
                 
                 // debug
                 crc_error_count <= next_crc_error_count;

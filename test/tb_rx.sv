@@ -1,9 +1,9 @@
 `timescale 1ns / 1ps
 
-// import params and crc32 function
-import rx_tx_pkg::*;
-
 module tb_rx;
+
+    // import params and crc32 function
+    import rx_tx_pkg::*;
 
     // parameters
     parameter DATA_WIDTH = 8;
