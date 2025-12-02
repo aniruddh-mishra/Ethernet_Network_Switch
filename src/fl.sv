@@ -26,9 +26,7 @@ module fl (
         if (!rst_n) begin
             sp <= NUM_BLOCKS[$clog2(NUM_BLOCKS+1)-1:0];
             // 0th entry unused
-            for (int i = 0; i <= NUM_BLOCKS; i++) begin
-                stack[i] <= i[11:0];
-            end
+            stack <= '{default: '0};
         end
         else begin
             alloc_gnt_o <= 0;
