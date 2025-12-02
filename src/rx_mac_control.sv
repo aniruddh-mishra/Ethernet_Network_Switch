@@ -1,3 +1,6 @@
+import rx_tx_pkg::*;
+import switch_pkg::*;
+
 module rx_mac_control (
     // GMII interface
     input logic gmii_rx_clk_i,
