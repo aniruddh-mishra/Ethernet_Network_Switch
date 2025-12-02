@@ -1,24 +1,21 @@
-import mem_pkg::*;
-
-module voq_table #(
-    parameter int VOQ_DEPTH = 8
-) (
+module voq (
     input logic clk, rst_n,
     input logic write_req_i,
-    input logic ptr_i,
+    input logic [ADDR_W-1:0] ptr_i,
     input logic read_req_i,
-    output logic ptr_o,
+    output logic [ADDR_W-1:0] ptr_o,
     output logic ptr_valid_o
 );
 
-parameter logic STATE_EMPTY = 2'd0;
-parameter logic STATE_NORMAL = 2'd1;
-parameter logic STATE_FULL = 2'd2;
+import mem_pkg::*;
+import voq_pkg::*;
 
-logic [1:0] state;
+typedef enum logic[1:0] {STATE_EMPTY, STATE_NORMAL, STATE_FULL} state_t;
+
+state_t state;
 logic [$clog2(VOQ_DEPTH)-1:0] voq_r_ptr;
 logic [$clog2(VOQ_DEPTH)-1:0] voq_w_ptr;
-logic [ADDR_W-1:0][VOQ_DEPTH] voq_table;
+logic [ADDR_W-1:0] voq_table [VOQ_DEPTH-1:0];
 
 always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -59,6 +56,7 @@ always_ff @(posedge clk or negedge rst_n) begin
                 end
                 else ptr_valid_o <= 1'b0;
             end
+            default: state <= STATE_EMPTY;
         endcase
     end
 end
