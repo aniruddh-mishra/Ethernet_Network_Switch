@@ -1,7 +1,7 @@
 // arbiter
 
 module arbiter #(
-    parameter int N
+    parameter int N=4
 ) (
     input clk,
     input logic rst_n,
