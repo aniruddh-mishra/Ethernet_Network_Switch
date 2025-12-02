@@ -1,5 +1,5 @@
 package address_table_pkg;
-    parameter int NUM_ENTRIES = NUM_PORTS * 4; // Number entries in the addres learning table (~4 per port)
+    parameter int NUM_ENTRIES = 16; // Number entries in the addres learning table (~4 per port)
     parameter int MAX_HIT = 16; // Maximum number of hits in the hit table before saturation
 
     // Priority encoder function
