@@ -42,10 +42,10 @@ module memory_write_ctrl (
     logic [ADDR_W-1:0] curr_idx; // current block idx
     logic [ADDR_W-1:0] next_idx; // used for footer
 
-    logic mem_ready; // cycle delayed
+    logic mem_trans_success; // cycle delayed
 
     // not ready if waiting for frame allocation
-    assign data_ready_o = state != WAIT;
+    assign data_ready_o = state != WAIT && !(state == WRITE_FOOTER && !mem_trans_success);
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -148,7 +148,7 @@ module memory_write_ctrl (
             end
 
             WRITE_FOOTER: begin
-                if (mem_ready) // mem transaction success
+                if (mem_trans_success) // mem transaction success
                     state_n = data_end_i ? IDLE : WRITE_PAYLOAD;
                 // TODO: FIX SINGLE FRAME LEAK IF WE GO TO IDLE STATE (LOW PRIORITY)
             end
