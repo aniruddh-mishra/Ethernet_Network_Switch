@@ -1,0 +1,10 @@
+apr/
+DVEfiles/
+command.log
+csrc/
+filenames.log
+inter.vpd
+netlist.v
+simv
+simv.daidir/
+ucli.key
