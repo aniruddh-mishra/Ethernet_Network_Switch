@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
 
+`include "rx_tx_pkg.svh"
 // import params and crc32 function
 import rx_tx_pkg::*;
 
