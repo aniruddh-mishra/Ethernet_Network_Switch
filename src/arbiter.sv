@@ -6,12 +6,12 @@ module arbiter #(
     input logic clk, rst_n,
 
     //// Memory write port arbitration ////
-    input logic [NUM_PORTS-1:0] mem_we_i,
+    input logic mem_we_i [NUM_PORTS-1:0],
     input logic [ADDR_W-1:0] mem_addr_i [NUM_PORTS-1:0],
     input logic [BLOCK_BITS-1:0] mem_wdata_i [NUM_PORTS-1:0],
 
     // output to memory write controller
-    output logic [NUM_PORTS-1:0] mem_gnt_o, 
+    output logic mem_gnt_o [NUM_PORTS-1:0], 
 
     // output to memory
     output logic mem_we_o,
@@ -21,10 +21,10 @@ module arbiter #(
 
     //// Free list arbitration ////
     // from memory write controller
-    input logic [NUM_PORTS-1:0] fl_alloc_req_i,
+    input logic fl_alloc_req_i [NUM_PORTS-1:0],
     
     // to memory write controller
-    output logic [NUM_PORTS-1:0] fl_alloc_gnt_o,
+    output logic fl_alloc_gnt_o [NUM_PORTS-1:0],
     output logic [ADDR_W-1:0] fl_alloc_block_idx_o [NUM_PORTS-1:0],
 
     // to fl
@@ -40,7 +40,7 @@ module arbiter #(
     input logic [47:0] rx_mac_src_addr_i [NUM_PORTS-1:0],
     input logic [47:0] rx_mac_dst_addr_i [NUM_PORTS-1:0],
     input logic [ADDR_W-1:0] data_start_addr_i [NUM_PORTS-1:0],
-    input logic [NUM_PORTS-1:0] eop_i,
+    input logic eop_i [NUM_PORTS-1:0],
 
     // to address learn table
     output logic [$clog2(NUM_PORTS)-1:0] port_o,
@@ -59,7 +59,7 @@ module arbiter #(
     assign mem_wdata_o = mem_wdata_i[cur];
     
     always_comb begin
-        mem_gnt_o = 0;
+        mem_gnt_o = '{default: 1'b0};
         mem_gnt_o[cur+1] = 1;
     end
 
@@ -74,13 +74,13 @@ module arbiter #(
     //// Memory write port arbitration ////
 
     //// Free list arbitration ////
-    logic [NUM_PORTS-1:0] local_fl_alloc_req;
+    logic local_fl_alloc_req [NUM_PORTS-1:0];
 
     assign fl_alloc_req_o = fl_alloc_req_i[cur];
     assign fl_alloc_block_idx_o[cur] = fl_alloc_block_idx_i;
     
     always_comb begin
-        fl_alloc_gnt_o = 0; 
+        fl_alloc_gnt_o = '{default: 1'b0}; 
 
         if (local_fl_alloc_req[cur])
             fl_alloc_gnt_o[cur] = fl_alloc_gnt_i;
@@ -88,7 +88,7 @@ module arbiter #(
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            local_fl_alloc_req <= 0;
+            local_fl_alloc_req <= '{default: 1'b0};
         end
         else begin
             local_fl_alloc_req <= fl_alloc_req_i;

@@ -12,7 +12,7 @@ module memory_write_ctrl (
 
     // iterface with free list
     output logic fl_alloc_req_o,
-    input logic fl_alloc_gnt,
+    input logic fl_alloc_gnt_i,
     input logic [ADDR_W-1:0] fl_alloc_block_idx_i,
 
     // to memory
@@ -43,7 +43,7 @@ module memory_write_ctrl (
 
     logic mem_trans_success; // cycle delayed
 
-    logic start_addr;
+    logic [ADDR_W-1:0] start_addr;
     logic [ADDR_W-1:0] frame_cnt;
 
     // not ready if waiting for frame allocation
@@ -72,13 +72,13 @@ module memory_write_ctrl (
             mem_wdata_o <= 0;
 
             if (state != IDLE) begin                
-                if (!frame_allocated && fl_alloc_gnt) begin
+                if (!frame_allocated && fl_alloc_gnt_i) begin
                     curr_idx <= fl_alloc_block_idx_i;
                     frame_allocated <= 1;
                     if (frame_cnt == 0)
                         start_addr <= fl_alloc_block_idx_i;
                 end
-                if (frame_allocated && !next_frame_allocated && fl_alloc_gnt) begin
+                if (frame_allocated && !next_frame_allocated && fl_alloc_gnt_i) begin
                     next_idx <= fl_alloc_block_idx_i;
                     next_frame_allocated <= 1;
                 end

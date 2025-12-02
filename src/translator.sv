@@ -10,7 +10,7 @@ module translator #(
     output logic address_learn_enable_o,
     output logic [47:0] address_learn_address_o,
     output logic [NUM_PORTS-1:0] write_reqs_o,
-    output logic [NUM_PORTS-1:0][ADDR_W-1:0] start_ptrs_o
+    output logic [ADDR_W-1:0] start_ptrs_o [NUM_PORTS-1:0]
 );
 
 import mem_pkg::*;
