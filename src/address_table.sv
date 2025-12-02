@@ -8,13 +8,11 @@ module address_table #(
     input logic [$clog2(NUM_PORTS)-1:0] learn_port_i,
 
     input logic read_req_i,
-    input logic [$clog2(NUM_PORTS)-1:0] read_address_i,
+    input logic [47:0] read_address_i,
 
     output logic [$clog2(NUM_PORTS)-1:0] read_port_o,
     output logic read_port_valid_o
 );
-
-import address_table_pkg::*;
 
 logic [$clog2(MAX_HIT)-1:0] table_hits [NUM_ENTRIES-1:0];
 logic [47:0] table_addresses [NUM_ENTRIES-1:0];
@@ -56,7 +54,7 @@ always_ff @(posedge clk or negedge rst_n) begin
         end
         if (read_req_i) begin
             for (int i=0; i<(NUM_ENTRIES); i=i+1) begin
-                if (table_addresses[i] == {{(48-$clog2(NUM_PORTS)){1'b0}}, read_address_i}) begin
+                if (table_addresses[i] == read_address_i) begin
                     read_port_o <= table_ports[i];
                     read_port_valid_o <= 1'b1;
                     if (i != {{(32-$clog2(NUM_ENTRIES)){1'b0}}, next_index} && !address_learn_exists && learn_req_i) begin // Saturation Counter

@@ -10,10 +10,8 @@ module translator #(
     output logic address_learn_enable_o,
     output logic [47:0] address_learn_address_o,
     output logic [NUM_PORTS-1:0] write_reqs_o,
-    output logic [NUM_PORTS-1:0][ADDR_W-1:0] start_ptrs_o
+    output logic [ADDR_W-1:0] start_ptrs_o [NUM_PORTS-1:0]
 );
-
-import mem_pkg::*;
 
 logic [ADDR_W-1:0] start_ptr_o;
 logic next_valid;
@@ -29,7 +27,7 @@ always_ff @(posedge clk, negedge rst_n) begin
                 write_reqs_o[address_port_i] <= 1'b1;
                 start_ptrs_o[address_port_i] <= start_ptr_o;
             end else begin
-                for (int i = 0; i < NUM_PORTS; i = i+1) begin // Flooding
+                for (int i = 0; i < NUM_PORTS; i = i+1) begin // Flooding TODO: Remove the flooding to ingress port
                     write_reqs_o[i] <= 1'b1;
                     start_ptrs_o[i] <= start_ptr_o;
                 end

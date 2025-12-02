@@ -14,7 +14,6 @@ module async_fifo #(
     output logic [DATA_WIDTH-1:0] r_data,
     output logic r_empty
 );
-    import mem_pkg::*;
 
     localparam int PTR_WIDTH = ADDR_WIDTH + 1;
     localparam int DEPTH = 1 << ADDR_WIDTH;

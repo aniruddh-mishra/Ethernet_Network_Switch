@@ -2,9 +2,6 @@ package rx_tx_pkg;
     // rx module parameters
     localparam DATA_WIDTH = 8;
 
-    // tx params
-    localparam VOQ_DEPTH = 8;
-
     // ethernet standards
     localparam PREAMBLE_BYTE = 8'h55; // repeated for 7 bytes
     localparam SFD_BYTE = 8'hD5; // 1 byte after preamble
@@ -54,4 +51,8 @@ package rx_tx_pkg;
         
         return crc;
     endfunction
+<<<<<<< HEAD
 endpackage
+=======
+endpackage
+>>>>>>> 412a1645352879a85f320249dff18ba9595e8c9b

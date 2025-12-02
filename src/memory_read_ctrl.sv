@@ -1,5 +1,3 @@
-// memory read controller
-
 module memory_read_ctrl (
     input logic clk,
     input logic rst_n,
@@ -20,8 +18,7 @@ module memory_read_ctrl (
     output logic [BLOCK_BITS-1:0] data_o, // 1 block out every cycle
     output logic data_valid_o,
     output logic data_end_o
-);    
-    import mem_pkg::*;
+);  
 
     logic [BLOCK_BITS-1:0] mem_rdata;
     logic mem_rvalid;

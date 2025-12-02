@@ -1,4 +1,3 @@
-
 module tx_mac_control (
     // GMII interface
     output logic gmii_tx_clk_o,

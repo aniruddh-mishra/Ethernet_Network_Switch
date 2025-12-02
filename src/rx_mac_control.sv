@@ -1,4 +1,3 @@
-
 module rx_mac_control (
     // GMII interface
     input logic gmii_rx_clk_i,
