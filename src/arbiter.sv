@@ -74,7 +74,7 @@ module arbiter #(
     logic local_fl_alloc_req [NUM_PORTS-1:0];
 
     assign fl_alloc_req_o = fl_alloc_req_i[cur];
-    assign fl_alloc_block_idx_o[cur] = fl_alloc_block_idx_i;
+    assign fl_alloc_block_idx_o = {fl_alloc_block_idx_o[cur-1:0], fl_alloc_block_idx_i, fl_alloc_block_idx_o[NUM_PORTS-1:cur+1]};
     
     always_comb begin
         fl_alloc_gnt_o = '{default: 1'b0}; 
