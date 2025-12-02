@@ -48,8 +48,25 @@ module arbiter #(
     output logic [47:0] rx_mac_src_addr_o,
     output logic [47:0] rx_mac_dst_addr_o,
     output logic [ADDR_W-1:0] data_start_addr_o,
-    output logic eop_o
+    output logic eop_o, 
     //// Address learn table arbitration ////
+
+    //// memory read control arbitration ////
+    // from memory read ctrl
+    input logic [N-1:0] mem_re_i,
+    input logic [ADDR_W-1:0] mem_raddr_i [N-1:0],
+    
+    // to memory
+    output logic mem_re_o,
+    output logic [ADDR_W-1:0] mem_raddr_o,
+
+    // from memory
+    input logic mem_rvalid_i,
+    input logic [BLOCK_BITS-1:0] mem_rdata_i, // 
+
+    // to memory read ctrl
+    output logic [N-1:0] mem_rvalid_o,
+    output logic [BLOCK_BITS-1:0] mem_rdata_o [N-1:0]
 );
     import mem_pkg::*;
     logic [$clog2(N)-1:0] cur;
@@ -103,4 +120,26 @@ module arbiter #(
     assign rx_mac_dst_addr_o = rx_mac_dst_addr_i[cur];
     assign data_start_addr_o = data_start_addr_i[cur];
     assign eop_o = eop_i[cur];
+
+    //// memory read control arbitration ////
+    logic [N-1:0] local_mem_re;
+
+    assign mem_re_o = mem_re_i[cur];
+    assign mem_raddr_o = mem_raddr_i[cur];
+
+    always_comb begin
+        mem_rvalid_o = 0; 
+
+        if (local_mem_re[cur])
+            mem_rvalid_o[cur] = mem_rvalid_i;
+    end
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            local_mem_re <= 0;
+        end
+        else begin
+            local_mem_re <= mem_re_i;
+        end
+    end
 endmodule
