@@ -51,8 +51,4 @@ package rx_tx_pkg;
         
         return crc;
     endfunction
-<<<<<<< HEAD
 endpackage
-=======
-endpackage
->>>>>>> 412a1645352879a85f320249dff18ba9595e8c9b
