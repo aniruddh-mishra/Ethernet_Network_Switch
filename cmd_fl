@@ -32,4 +32,4 @@ src/async_fifo.sv
 src/memory_write_ctrl.sv
 src/voq.sv
 
-test/tb_switch.sv
+tests/tb_switch.sv
