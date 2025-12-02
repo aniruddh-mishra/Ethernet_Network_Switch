@@ -22,7 +22,7 @@ module clk_div #(parameter int DIVIDE = 4)(input logic clk_in, input logic rst_n
 
     always_ff @(posedge clk_in or negedge rst_n) begin
         if (!rst_n) begin
-            div_ff <= 0;
+            div_ctr <= 0;
             clk_out <= 0;
         end else begin
             if (div_ctr == ((div_ff>>1) - 1)) begin
