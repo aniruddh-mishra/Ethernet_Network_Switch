@@ -20,8 +20,6 @@ module rx_mac_control (
     output logic frame_eof_o, // single high end of frame - follows after last data/FCS byte - implicitly handles FIFO_full too which drops bytes
     output logic frame_error_o // high at eof if CRC or other error
 );
-// import params and crc32 function
-import rx_tx_pkg::*;
 
 // status and debug signals (simulation only)
 logic [31:0] crc_error_count; // # of frames with CRC errors
@@ -67,6 +65,7 @@ logic [5:0][7:0] next_mac_dst_addr_o, next_mac_src_addr_o;
 logic [DATA_WIDTH-1:0] next_frame_data_o;
 logic next_frame_valid_o;
 logic next_frame_sof_o; logic next_frame_eof_o; logic next_frame_error_o;
+logic [1:0] eof_ctr, next_eof_ctr; // stall for last byte of data after dv goes low
 
 // output status and debug signals
 logic [31:0] next_crc_error_count; 
@@ -92,12 +91,14 @@ always_comb begin
     // default values
     next_state = current_state;
     fifo_rd_en = 1'b0; // default false
+    next_frame_valid_o = 1'b0; // default false
     next_crc_reg = crc_reg;
     next_preamble_header_ctr = preamble_header_ctr;
     next_mac_dst_addr_o = mac_dst_addr_o; next_mac_src_addr_o = mac_src_addr_o;
-    next_frame_data_o = frame_data_o; next_frame_valid_o = frame_valid_o;
+    next_frame_data_o = frame_data_o;
     next_frame_eof_o = 1'b0; next_frame_sof_o = 1'b0; // default false
     next_frame_error_o = rx_er || frame_error_o; // sticky error during frame
+    next_eof_ctr = eof_ctr;
     
     // debug
     next_crc_error_count = crc_error_count;
@@ -109,6 +110,7 @@ always_comb begin
         IDLE: begin // assume IFG is not violated from sender
             next_crc_reg = 32'hFFFFFFFF;
             next_frame_error_o = 1'b0; // resets frame error which stays high during frame
+            next_eof_ctr = 0; // reset eof ctr
             if (!fifo_empty) fifo_rd_en = 1'b1; 
             if (prev_fifo_rd_en) begin
                 if (fifo_dout == PREAMBLE_BYTE) begin
@@ -123,7 +125,6 @@ always_comb begin
                 if (preamble_header_ctr == 7) begin
                     if (fifo_dout == SFD_BYTE) begin 
                         next_preamble_header_ctr = preamble_header_ctr + 1;
-                        next_frame_sof_o = 1'b1;
                         next_state = HEADER;
                     end else begin
                         next_state = IDLE; // invalid SFD byte, go back to IDLE
@@ -139,8 +140,11 @@ always_comb begin
             if (prev_fifo_rd_en) begin
                 next_crc_reg = crc32_next(fifo_dout, crc_reg);
 
-                if (preamble_header_ctr < 14) begin // 8 + 6 = 14
+                if (preamble_header_ctr == 8) begin
+                    next_frame_sof_o = 1'b1;
                     next_mac_dst_addr_o = {mac_dst_addr_o[4:0], fifo_dout}; // SIPO
+                end else if (preamble_header_ctr < 14) begin // 8 + 6 = 14
+                    next_mac_dst_addr_o = {mac_dst_addr_o[4:0], fifo_dout}; 
                 end else if (preamble_header_ctr < 20) begin
                     next_mac_src_addr_o = {mac_src_addr_o[4:0], fifo_dout};
                 end 
@@ -159,8 +163,9 @@ always_comb begin
                 next_crc_reg = crc32_next(fifo_dout, crc_reg);
                 next_frame_data_o = fifo_dout;
                 next_frame_valid_o = 1'b1;
-            end else if (!rx_dv) begin // sender has finished sending frame + we have read all data
-                if (crc_reg != CRC32_CONSTANT) begin
+            end else if (!rx_dv && (eof_ctr == 3)) begin // sender has finished sending frame + we have read all data
+                next_crc_reg = ~crc_reg; // invert for final CRC check
+                if ((next_crc_reg) != CRC32_CONSTANT) begin // final invert step
                     next_frame_error_o = 1'b1; // allow payload to cut through, perform CRC calculations as data arrives, flag error at end
                     // update debug ctrs
                     next_crc_error_count = crc_error_count + 1;
@@ -170,6 +175,7 @@ always_comb begin
                 next_state = IDLE;
                 next_rx_frame_count = rx_frame_count + 1; // update debug ctrs
             end
+            if (!rx_dv && (eof_ctr != 3)) next_eof_ctr = eof_ctr + 1; // saturating count to 3
         end
         default: next_state = IDLE;
     endcase
@@ -188,6 +194,7 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         preamble_header_ctr <= 0;
         mac_dst_addr_o <= 0;
         mac_src_addr_o <= 0;
+        eof_ctr <= 0;
 
         // debug
         crc_error_count <= 0;
@@ -196,27 +203,26 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         fifo_underflow_count <= 0;
     end else begin
         if (frame_grant_i || (current_state == IDLE) || (current_state == PREAMBLE)) begin // freeze current data if mem is backed up during data sending (header/payload)
-            if (!rx_dv) begin
-                current_state <= IDLE; // if frame ended while mem backlogged, reset to IDLE
-            end else begin
-                current_state <= next_state;
-                prev_fifo_rd_en <= fifo_rd_en;
-                frame_data_o <= next_frame_data_o;
-                frame_eof_o <= next_frame_eof_o;
-                frame_sof_o <= next_frame_sof_o;
-                frame_valid_o <= next_frame_valid_o;
-                frame_error_o <= next_frame_error_o;
-                preamble_header_ctr <= next_preamble_header_ctr;
-                mac_dst_addr_o <= next_mac_dst_addr_o;
-                mac_src_addr_o <= next_mac_src_addr_o;
-                crc_reg <= next_crc_reg;
-                
-                // debug
-                crc_error_count <= next_crc_error_count;
-                rx_error_count <= next_rx_error_count;
-                rx_frame_count <= next_rx_frame_count;
-            end
-        end
+            current_state <= next_state;
+            prev_fifo_rd_en <= fifo_rd_en;
+            frame_data_o <= next_frame_data_o;
+            frame_eof_o <= next_frame_eof_o;
+            frame_sof_o <= next_frame_sof_o;
+            frame_valid_o <= next_frame_valid_o;
+            frame_error_o <= next_frame_error_o;
+            preamble_header_ctr <= next_preamble_header_ctr;
+            mac_dst_addr_o <= next_mac_dst_addr_o;
+            mac_src_addr_o <= next_mac_src_addr_o;
+            crc_reg <= next_crc_reg;
+            eof_ctr <= next_eof_ctr;
+            
+            // debug
+            crc_error_count <= next_crc_error_count;
+            rx_error_count <= next_rx_error_count;
+            rx_frame_count <= next_rx_frame_count;
+        end else if (!rx_dv) begin
+            current_state <= IDLE; // if frame ended while mem backlogged, reset to IDLE
+        end 
 
         if (fifo_empty) fifo_underflow_count <= fifo_underflow_count + 1;
     end

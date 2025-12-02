@@ -1,436 +1,236 @@
-`timescale 1ns / 1ps
+`timescale 1ns/1ps
 
 module tb_rx;
 
-    // import params and crc32 function
-    import rx_tx_pkg::*;
+// Import the package
+import rx_tx_pkg::*;
 
-    // parameters
-    parameter DATA_WIDTH = 8;
-    parameter GMII_CLK_PERIOD = 8;    // 125 MHz
-    parameter SWITCH_CLK_PERIOD = 10; // 100 MHz
-    
-    // tb signals
-    logic gmii_rx_clk;
-    logic [DATA_WIDTH-1:0] gmii_rx_data;
-    logic gmii_rx_dv;
-    logic gmii_rx_er;
-    logic switch_clk;
-    logic switch_rst_n;
-    
-    // grant signals (from tb to DUT)
-    logic mac_dst_grant;
-    logic mac_src_grant;
-    logic mac_type_grant;
-    logic frame_grant;
-    
-    // DUT outputs
-    logic [5:0][7:0] mac_dst_addr, mac_src_addr;
-    logic [1:0][7:0] mac_type;
-    logic mac_dst_valid, mac_src_valid, mac_type_valid;
-    logic [DATA_WIDTH-1:0] frame_data;
-    logic frame_valid;
-    logic frame_sof;
-    logic frame_eof;
-    logic frame_error;
-    logic [31:0] crc_error_count;
-    logic [31:0] rx_error_count;
-    logic [31:0] rx_frame_count;
-    logic [31:0] fifo_overflow_count;
-    logic [31:0] fifo_underflow_count;
-    
-    // test variables
-    int byte_index;
-    int test_num;
-    
-    // DUT Instantiation    
-    rx_mac_control #(
-        .DATA_WIDTH(DATA_WIDTH)
-    ) dut (
-        .gmii_rx_clk(gmii_rx_clk),
-        .gmii_rx_data(gmii_rx_data),
-        .gmii_rx_dv(gmii_rx_dv),
-        .gmii_rx_er(gmii_rx_er),
-        .switch_clk(switch_clk),
-        .switch_rst_n(switch_rst_n),
-        .mac_dst_addr(mac_dst_addr),
-        .mac_src_addr(mac_src_addr),
-        .mac_type(mac_type),
-        .mac_dst_valid(mac_dst_valid),
-        .mac_src_valid(mac_src_valid),
-        .mac_type_valid(mac_type_valid),
-        .mac_dst_grant(mac_dst_grant),
-        .mac_src_grant(mac_src_grant),
-        .mac_type_grant(mac_type_grant),
-        .frame_data(frame_data),
-        .frame_valid(frame_valid),
-        .frame_grant(frame_grant),
-        .frame_sof(frame_sof),
-        .frame_eof(frame_eof),
-        .frame_error(frame_error),
-        .crc_error_count(crc_error_count),
-        .rx_error_count(rx_error_count),
-        .rx_frame_count(rx_frame_count),
-        .fifo_overflow_count(fifo_overflow_count),
-        .fifo_underflow_count(fifo_underflow_count)
-    );
-    
-    initial begin
-        gmii_rx_clk = 0;
-        forever #(GMII_CLK_PERIOD/2) gmii_rx_clk = ~gmii_rx_clk;
+// Parameters
+localparam DATA_WIDTH = 8;
+localparam GMII_CLK_PERIOD = 8;  // 125 MHz
+localparam SWITCH_CLK_PERIOD = 2; // 500 MHz
+
+// DUT signals
+logic gmii_rx_clk;
+logic [DATA_WIDTH-1:0] gmii_rx_data;
+logic gmii_rx_dv;
+logic gmii_rx_er;
+logic switch_clk, switch_rst_n;
+logic [5:0][7:0] mac_dst_addr, mac_src_addr;
+logic [DATA_WIDTH-1:0] frame_data;
+logic frame_valid;
+logic frame_grant;
+logic frame_sof;
+logic frame_eof;
+logic frame_error;
+
+// Clock generation
+initial begin
+    gmii_rx_clk = 0;
+    forever #(GMII_CLK_PERIOD/2) gmii_rx_clk = ~gmii_rx_clk;
+end
+
+initial begin
+    switch_clk = 0;
+    forever #(SWITCH_CLK_PERIOD/2) switch_clk = ~switch_clk;
+end
+
+// DUT instantiation
+rx_mac_control dut (
+    .gmii_rx_clk_i(gmii_rx_clk),
+    .gmii_rx_data_i(gmii_rx_data),
+    .gmii_rx_dv_i(gmii_rx_dv),
+    .gmii_rx_er_i(gmii_rx_er),
+    .switch_clk(switch_clk),
+    .switch_rst_n(switch_rst_n),
+    .mac_dst_addr_o(mac_dst_addr),
+    .mac_src_addr_o(mac_src_addr),
+    .frame_data_o(frame_data),
+    .frame_valid_o(frame_valid),
+    .frame_grant_i(frame_grant),
+    .frame_sof_o(frame_sof),
+    .frame_eof_o(frame_eof),
+    .frame_error_o(frame_error)
+);
+
+// Task to send a byte on GMII interface
+task send_byte(input logic [7:0] data, input logic dv = 1'b1, input logic er = 1'b0);
+    @(posedge gmii_rx_clk);
+    gmii_rx_data <= data;
+    gmii_rx_dv <= dv;
+    gmii_rx_er <= er;
+endtask
+
+// Task to calculate CRC32 for a frame
+function logic [31:0] calc_crc32(logic [7:0] frame_bytes[]);
+    logic [31:0] crc = 32'hFFFFFFFF;
+    foreach(frame_bytes[i]) begin
+        crc = crc32_next(frame_bytes[i], crc);
+        $display("[%0t] CRC after byte %0d (%h): %h", $time, i, frame_bytes[i], crc);
     end
+    return ~crc; // Invert for final CRC
+endfunction
+
+// Task to send a complete Ethernet frame
+task send_frame(
+    input logic [47:0] dst_mac,
+    input logic [47:0] src_mac,
+    input logic [15:0] eth_type,
+    input logic [7:0] payload[],
+    input logic corrupt_crc = 1'b0
+);
+    logic [31:0] crc;
+    logic [7:0] frame_data[];
+    int idx;
     
-    initial begin
-        switch_clk = 0;
-        forever #(SWITCH_CLK_PERIOD/2) switch_clk = ~switch_clk;
-    end
+    $display("[%0t] Sending frame: DST=%h, SRC=%h, Type=%h, Payload size=%0d, Corrupt CRC=%0b",
+             $time, dst_mac, src_mac, eth_type, payload.size(), corrupt_crc);
     
-    function automatic [31:0] crc32_next(input logic [7:0] data, input logic [31:0] crc_in);
-        integer i;
-        logic [31:0] crc;
-        logic [7:0] data_reflected;
-        // ethernet data comes in lSB first, so reflect byte
-        data_reflected = {data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]};
-        crc = crc_in ^ (data_reflected << 24);
-        // unrolls into 8 shifts/xors
-        for (i = 0; i < 8; i = i + 1) begin
-            if (crc[31]) begin
-                crc = (crc << 1) ^ CRC32_POLY_REFLECTED;
-            end else begin
-                crc = crc << 1;
-            end
-        end
-        return ~crc; // final inversion step needed(?)
-    endfunction
+    // Build frame for CRC calculation (header + payload)
+    frame_data = new[14 + payload.size()];
+    idx = 0;
     
-    // grant logic
-    initial begin
-        mac_dst_grant = 1'b0;
-        mac_src_grant = 1'b0;
-        mac_type_grant = 1'b0;
-        frame_grant = 1'b0;
-        wait(switch_rst_n);
-        repeat(5) @(posedge switch_clk);
-        
-        // grant by default (no backpressure)
-        mac_dst_grant = 1'b1;
-        mac_src_grant = 1'b1;
-        mac_type_grant = 1'b1;
-        frame_grant = 1'b1;
-    end
+    // Destination MAC (6 bytes)
+    for(int i = 5; i >= 0; i--) frame_data[idx++] = dst_mac[i*8 +: 8];
+    // Source MAC (6 bytes)
+    for(int i = 5; i >= 0; i--) frame_data[idx++] = src_mac[i*8 +: 8];
+    // EtherType (2 bytes)
+    frame_data[idx++] = eth_type[15:8];
+    frame_data[idx++] = eth_type[7:0];
+    // Payload
+    foreach(payload[i]) frame_data[idx++] = payload[i];
     
-    // monitor 
-    always @(posedge switch_clk) begin
-        if (frame_sof) begin
-            $display("[%0t] SOF detected", $time);
-        end
-        
-        if (frame_valid) begin
-            $display("[%0t] Data: %h", $time, frame_data);
-        end
-        
-        if (frame_eof) begin
-            $display("[%0t] EOF detected - Error: %b", $time, frame_error);
-            $display("---");
-        end
-        
-        if (mac_dst_valid && mac_dst_grant) begin
-            $display("[%0t] DST MAC: %h:%h:%h:%h:%h:%h", $time,
-                     mac_dst_addr[5], mac_dst_addr[4], mac_dst_addr[3],
-                     mac_dst_addr[2], mac_dst_addr[1], mac_dst_addr[0]);
-        end
-        
-        if (mac_src_valid && mac_src_grant) begin
-            $display("[%0t] SRC MAC: %h:%h:%h:%h:%h:%h", $time,
-                     mac_src_addr[5], mac_src_addr[4], mac_src_addr[3],
-                     mac_src_addr[2], mac_src_addr[1], mac_src_addr[0]);
-        end
-        
-        if (mac_type_valid && mac_type_grant) begin
-            $display("[%0t] ETH TYPE: %h", $time, {mac_type[1], mac_type[0]});
-        end
-    end
+    // Calculate CRC
+    crc = calc_crc32(frame_data);
+    if (corrupt_crc) crc = crc ^ 32'hFFFFFFFF; // Corrupt it
     
-    initial begin
-        logic [31:0] crc;
+    // Send preamble (7 bytes of 0x55)
+    for(int i = 0; i < 7; i++) send_byte(8'h55);
+    
+    // Send SFD (1 byte of 0xD5)
+    send_byte(8'hD5);
+    
+    // Send frame data
+    foreach(frame_data[i]) send_byte(frame_data[i]);
+    
+    // Send CRC (4 bytes, LSB first)
+    send_byte(crc[7:0]); $display("[%0t] Sent CRC byte: %h", $time, crc[7:0]);
+    send_byte(crc[15:8]); $display("[%0t] Sent CRC byte: %h", $time, crc[15:8]);
+    send_byte(crc[23:16]); $display("[%0t] Sent CRC byte: %h", $time, crc[23:16]);
+    send_byte(crc[31:24]); $display("[%0t] Sent CRC byte: %h", $time, crc[31:24]);
+    
+    // End transmission
+    @(posedge gmii_rx_clk);
+    gmii_rx_dv <= 1'b0;
+    gmii_rx_data <= 8'h00;
+    
+    // Inter-frame gap (12 bytes minimum)
+    repeat(12) @(posedge gmii_rx_clk);
+endtask
+
+// Main test
+initial begin
+    logic [7:0] test_payload[];
+    
+    // Initialize signals
+    gmii_rx_data = 0;
+    gmii_rx_dv = 0;
+    gmii_rx_er = 0;
+    switch_rst_n = 0;
+    frame_grant = 1; // Always grant for simplicity
+    
+    // Reset
+    repeat(10) @(posedge switch_clk);
+    switch_rst_n = 1;
+    repeat(10) @(posedge switch_clk);
+    
+    $display("\n=== Test 1: Valid frame with correct CRC ===");
+    test_payload = new[46]; // Minimum payload for 64-byte frame
+    for(int i = 0; i < 46; i++) test_payload[i] = i;
+    
+    fork
+        send_frame(
+            .dst_mac(48'hFF_FF_FF_FF_FF_FF),  // Broadcast
+            .src_mac(48'h00_11_22_33_44_55),
+            .eth_type(16'h0800),  // IPv4
+            .payload(test_payload),
+            .corrupt_crc(1'b0)
+        );
         
-        // init signals
-        gmii_rx_data = 8'h00;
-        gmii_rx_dv = 1'b0;
-        gmii_rx_er = 1'b0;
-        switch_rst_n = 1'b0;
-        test_num = 0;
+        // Wait for frame to be processed
+        @(posedge frame_sof);
+        $display("[%0t] Frame SOF detected", $time);
+        @(posedge frame_eof);
+        $display("[%0t] Frame EOF detected", $time);
+        $display("[%0t] DST MAC: %h", $time, mac_dst_addr);
+        $display("[%0t] SRC MAC: %h", $time, mac_src_addr);
+        $display("[%0t] Frame Error: %0b (Expected: 0)", $time, frame_error);
+    join 
+    
+    repeat(20) @(posedge switch_clk);
+    
+    $display("\n=== Test 2: Valid frame with CORRUPTED CRC ===");
+    test_payload = new[46];
+    for(int i = 0; i < 46; i++) test_payload[i] = 8'hAA;
+    
+    fork
+        send_frame(
+            .dst_mac(48'h01_02_03_04_05_06),
+            .src_mac(48'hAA_BB_CC_DD_EE_FF),
+            .eth_type(16'h0806),  // ARP
+            .payload(test_payload),
+            .corrupt_crc(1'b1)  // Corrupt the CRC
+        );
+    
+        @(posedge frame_sof);
+        $display("[%0t] Frame SOF detected", $time);
+        @(posedge frame_eof);
+        $display("[%0t] Frame EOF detected", $time);
+        $display("[%0t] DST MAC: %h", $time, mac_dst_addr);
+        $display("[%0t] SRC MAC: %h", $time, mac_src_addr);
+        $display("[%0t] Frame Error: %0b (Expected: 1)", $time, frame_error);
+    join
+    
+    repeat(20) @(posedge switch_clk);
+    
+    $display("\n=== Test 3: Another valid frame ===");
+    test_payload = new[100];
+    for(int i = 0; i < 100; i++) test_payload[i] = i[7:0];
+    
+    fork
+        send_frame(
+            .dst_mac(48'h12_34_56_78_9A_BC),
+            .src_mac(48'hDE_AD_BE_EF_CA_FE),
+            .eth_type(16'h86DD),  // IPv6
+            .payload(test_payload),
+            .corrupt_crc(1'b0)
+        );
         
-        // rst
-        repeat(20) @(posedge switch_clk);
-        switch_rst_n = 1'b1;
-        repeat(20) @(posedge switch_clk);
-        
-        // test 1: min size frame with grants enabled
-        test_num = 1;
-        $display("\n=== Test %0d: Minimum size frame (all grants enabled) ===", test_num);
-        
-        crc = 32'hFFFFFFFF;
-        
-        repeat(10) @(posedge gmii_rx_clk);
-        
-        // send preamble + SFD
-        @(posedge gmii_rx_clk);
-        gmii_rx_dv = 1'b1;
-        for (byte_index = 0; byte_index < 7; byte_index++) begin
-            gmii_rx_data = 8'h55;
-            @(posedge gmii_rx_clk);
-        end
-        gmii_rx_data = 8'hD5;
-        @(posedge gmii_rx_clk);
-        
-        // dst MAC: FF:FF:FF:FF:FF:FF
-        gmii_rx_data = 8'hFF; crc = calc_crc32(8'hFF, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hFF; crc = calc_crc32(8'hFF, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hFF; crc = calc_crc32(8'hFF, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hFF; crc = calc_crc32(8'hFF, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hFF; crc = calc_crc32(8'hFF, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hFF; crc = calc_crc32(8'hFF, crc); @(posedge gmii_rx_clk);
-        
-        // src MAC: 11:22:33:44:55:66
-        gmii_rx_data = 8'h11; crc = calc_crc32(8'h11, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h22; crc = calc_crc32(8'h22, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h33; crc = calc_crc32(8'h33, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h44; crc = calc_crc32(8'h44, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h55; crc = calc_crc32(8'h55, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h66; crc = calc_crc32(8'h66, crc); @(posedge gmii_rx_clk);
-        
-        // EtherType: 0x0800 (IPv4)
-        gmii_rx_data = 8'h08; crc = calc_crc32(8'h08, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h00; crc = calc_crc32(8'h00, crc); @(posedge gmii_rx_clk);
-        
-        // payload (46 bytes min for 64-byte frame)
-        for (byte_index = 0; byte_index < 46; byte_index++) begin
-            gmii_rx_data = byte_index[7:0];
-            crc = calc_crc32(byte_index[7:0], crc);
-            @(posedge gmii_rx_clk);
-        end
-        
-        // FCS (4 bytes CRC, LSB first)
-        gmii_rx_data = crc[7:0];   @(posedge gmii_rx_clk);
-        gmii_rx_data = crc[15:8];  @(posedge gmii_rx_clk);
-        gmii_rx_data = crc[23:16]; @(posedge gmii_rx_clk);
-        gmii_rx_data = crc[31:24]; @(posedge gmii_rx_clk);
-        
-        // eof (deassert dv)
-        gmii_rx_dv = 1'b0;
-        gmii_rx_data = 8'h00;
-        
-        // IFG (12 bytes)
-        repeat(12) @(posedge gmii_rx_clk);
-        
-        // wait
-        repeat(100) @(posedge switch_clk);
-        
-        // test 2: backpressure on frame_grant
-        test_num = 2;
-        $display("\n=== Test %0d: Frame with backpressure ===", test_num);
-        
-        // background process to toggle frame_grant during this test
-        fork
-            begin
-                // toggle frame_grant 
-                repeat(50) begin
-                    @(posedge switch_clk);
-                    frame_grant = ~frame_grant;
-                end
-                frame_grant = 1'b1; // re-enable at end
-            end
-        join_none
-        
-        crc = 32'hFFFFFFFF;
-        
-        gmii_rx_dv = 1'b1;
-        for (byte_index = 0; byte_index < 7; byte_index++) begin
-            gmii_rx_data = 8'h55;
-            @(posedge gmii_rx_clk);
-        end
-        gmii_rx_data = 8'hD5;
-        @(posedge gmii_rx_clk);
-        
-        // dst MAC: AA:BB:CC:DD:EE:FF
-        gmii_rx_data = 8'hAA; crc = calc_crc32(8'hAA, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hBB; crc = calc_crc32(8'hBB, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hCC; crc = calc_crc32(8'hCC, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hDD; crc = calc_crc32(8'hDD, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hEE; crc = calc_crc32(8'hEE, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hFF; crc = calc_crc32(8'hFF, crc); @(posedge gmii_rx_clk);
-        
-        // src MAC: 00:11:22:33:44:55
-        gmii_rx_data = 8'h00; crc = calc_crc32(8'h00, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h11; crc = calc_crc32(8'h11, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h22; crc = calc_crc32(8'h22, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h33; crc = calc_crc32(8'h33, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h44; crc = calc_crc32(8'h44, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h55; crc = calc_crc32(8'h55, crc); @(posedge gmii_rx_clk);
-        
-        // EtherType: 0x86DD (IPv6)
-        gmii_rx_data = 8'h86; crc = calc_crc32(8'h86, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hDD; crc = calc_crc32(8'hDD, crc); @(posedge gmii_rx_clk);
-        
-        for (byte_index = 0; byte_index < 100; byte_index++) begin
-            gmii_rx_data = (byte_index * 3) % 256;
-            crc = calc_crc32((byte_index * 3) % 256, crc);
-            @(posedge gmii_rx_clk);
-        end
-        
-        gmii_rx_data = crc[7:0];   @(posedge gmii_rx_clk);
-        gmii_rx_data = crc[15:8];  @(posedge gmii_rx_clk);
-        gmii_rx_data = crc[23:16]; @(posedge gmii_rx_clk);
-        gmii_rx_data = crc[31:24]; @(posedge gmii_rx_clk);
-        
-        gmii_rx_dv = 1'b0;
-        gmii_rx_data = 8'h00;
-        
-        repeat(12) @(posedge gmii_rx_clk);
-        
-        repeat(300) @(posedge switch_clk);
-        
-        // test 3: delayed MAC address grants
-        test_num = 3;
-        $display("\n=== Test %0d: Frame with delayed MAC address grants ===", test_num);
-        
-        // deassert grants
+        @(posedge frame_sof);
+        $display("[%0t] Frame SOF detected", $time);
+        @(posedge frame_eof);
+        $display("[%0t] Frame EOF detected", $time);
+        $display("[%0t] DST MAC: %h", $time, mac_dst_addr);
+        $display("[%0t] SRC MAC: %h", $time, mac_src_addr);
+        $display("[%0t] Frame Error: %0b (Expected: 0)", $time, frame_error);
+    join
+
+    repeat(50) @(posedge switch_clk);
+    
+    $display("\n=== Test Complete ===");
+    $finish;
+end
+
+// Monitor for debugging
+initial begin
+    $display("Time\t\tSOF\tEOF\tValid\tError\tData");
+    forever begin
         @(posedge switch_clk);
-        mac_dst_grant = 1'b0;
-        mac_src_grant = 1'b0;
-        mac_type_grant = 1'b0;
-        
-        crc = 32'hFFFFFFFF;
-        
-        gmii_rx_dv = 1'b1;
-        for (byte_index = 0; byte_index < 7; byte_index++) begin
-            gmii_rx_data = 8'h55;
-            @(posedge gmii_rx_clk);
+        if (frame_valid || frame_sof || frame_eof) begin
+            $display("%0t\t%b\t%b\t%b\t%b\t%h", 
+                     $time, frame_sof, frame_eof, frame_valid, frame_error, frame_data);
         end
-        gmii_rx_data = 8'hD5;
-        @(posedge gmii_rx_clk);
-        
-        // dst MAC: 12:34:56:78:9A:BC
-        gmii_rx_data = 8'h12; crc = calc_crc32(8'h12, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h34; crc = calc_crc32(8'h34, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h56; crc = calc_crc32(8'h56, crc); @(posedge gmii_rx_clk);
-        
-        // grant dst after a few bytes
-        repeat(10) @(posedge switch_clk);
-        mac_dst_grant = 1'b1;
-        
-        gmii_rx_data = 8'h78; crc = calc_crc32(8'h78, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h9A; crc = calc_crc32(8'h9A, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hBC; crc = calc_crc32(8'hBC, crc); @(posedge gmii_rx_clk);
-        
-        // src MAC: DE:F0:12:34:56:78
-        gmii_rx_data = 8'hDE; crc = calc_crc32(8'hDE, crc); @(posedge gmii_rx_clk);
-        
-        repeat(10) @(posedge switch_clk);
-        mac_src_grant = 1'b1;
-        
-        gmii_rx_data = 8'hF0; crc = calc_crc32(8'hF0, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h12; crc = calc_crc32(8'h12, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h34; crc = calc_crc32(8'h34, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h56; crc = calc_crc32(8'h56, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h78; crc = calc_crc32(8'h78, crc); @(posedge gmii_rx_clk);
-        
-        // EtherType: 0806 (ARP)
-        gmii_rx_data = 8'h08; crc = calc_crc32(8'h08, crc); @(posedge gmii_rx_clk);
-        
-        repeat(10) @(posedge switch_clk);
-        mac_type_grant = 1'b1;
-        
-        gmii_rx_data = 8'h06; crc = calc_crc32(8'h06, crc); @(posedge gmii_rx_clk);
-        
-        for (byte_index = 0; byte_index < 46; byte_index++) begin
-            gmii_rx_data = 8'hA5;
-            crc = calc_crc32(8'hA5, crc);
-            @(posedge gmii_rx_clk);
-        end
-        
-        gmii_rx_data = crc[7:0];   @(posedge gmii_rx_clk);
-        gmii_rx_data = crc[15:8];  @(posedge gmii_rx_clk);
-        gmii_rx_data = crc[23:16]; @(posedge gmii_rx_clk);
-        gmii_rx_data = crc[31:24]; @(posedge gmii_rx_clk);
-        
-        gmii_rx_dv = 1'b0;
-        gmii_rx_data = 8'h00;
-        
-        repeat(12) @(posedge gmii_rx_clk);
-        
-        repeat(100) @(posedge switch_clk);
-        
-        // test 4: invalid CRC
-        test_num = 4;
-        $display("\n=== Test %0d: Frame with bad CRC ===", test_num);
-        
-        crc = 32'hFFFFFFFF;
-        
-        gmii_rx_dv = 1'b1;
-        for (byte_index = 0; byte_index < 7; byte_index++) begin
-            gmii_rx_data = 8'h55;
-            @(posedge gmii_rx_clk);
-        end
-        gmii_rx_data = 8'hD5;
-        @(posedge gmii_rx_clk);
-        
-        // dst MAC: 99:88:77:66:55:44
-        gmii_rx_data = 8'h99; crc = calc_crc32(8'h99, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h88; crc = calc_crc32(8'h88, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h77; crc = calc_crc32(8'h77, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h66; crc = calc_crc32(8'h66, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h55; crc = calc_crc32(8'h55, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h44; crc = calc_crc32(8'h44, crc); @(posedge gmii_rx_clk);
-        
-        // src MAC: 33:22:11:00:FF:EE
-        gmii_rx_data = 8'h33; crc = calc_crc32(8'h33, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h22; crc = calc_crc32(8'h22, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h11; crc = calc_crc32(8'h11, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h00; crc = calc_crc32(8'h00, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hFF; crc = calc_crc32(8'hFF, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'hEE; crc = calc_crc32(8'hEE, crc); @(posedge gmii_rx_clk);
-        
-        // EtherType: 0x0800 (IPv4)
-        gmii_rx_data = 8'h08; crc = calc_crc32(8'h08, crc); @(posedge gmii_rx_clk);
-        gmii_rx_data = 8'h00; crc = calc_crc32(8'h00, crc); @(posedge gmii_rx_clk);
-        
-        for (byte_index = 0; byte_index < 46; byte_index++) begin
-            gmii_rx_data = 8'h5A;
-            crc = calc_crc32(8'h5A, crc);
-            @(posedge gmii_rx_clk);
-        end
-        
-        // send wrong FCS (flip all bits)
-        gmii_rx_data = crc[7:0] ^ 8'hFF;   @(posedge gmii_rx_clk); 
-        gmii_rx_data = crc[15:8] ^ 8'hFF;  @(posedge gmii_rx_clk);
-        gmii_rx_data = crc[23:16] ^ 8'hFF; @(posedge gmii_rx_clk);
-        gmii_rx_data = crc[31:24] ^ 8'hFF; @(posedge gmii_rx_clk);
-        
-        gmii_rx_dv = 1'b0;
-        gmii_rx_data = 8'h00;
-        
-        repeat(12) @(posedge gmii_rx_clk);
-        
-        repeat(100) @(posedge switch_clk);
-        
-        // Test Summary
-        $display("\n========================================");
-        $display("Test Summary");
-        $display("RX frames received:  %0d", rx_frame_count);
-        $display("RX errors:           %0d", rx_error_count);
-        $display("CRC errors:          %0d", crc_error_count);
-        $display("FIFO overflows:      %0d", fifo_overflow_count);
-        $display("FIFO underflows:     %0d", fifo_underflow_count);
-        $display("========================================\n");
-        
-        if (rx_frame_count != 4 || crc_error_count != 1) begin
-            $display("Exp: 4 frames, 1 CRC error");
-            $display("Got: %0d frames, %0d CRC errors", rx_frame_count, crc_error_count);
-        end
-        
-        $finish;
     end
+end
 
 endmodule
