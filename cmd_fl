@@ -21,6 +21,7 @@ packages/address_table_pkg.svh
 packages/switch_pkg.svh
 packages/voq_pkg.svh
 
+src/switch.sv
 src/address_table.sv
 src/fl.sv
 src/rx_mac_control.sv
@@ -30,6 +31,5 @@ src/sram.sv
 src/async_fifo.sv
 src/memory_write_ctrl.sv
 src/voq.sv
-src/switch.sv
 
 test/tb_switch.sv
