@@ -6,6 +6,7 @@ package mem_pkg;
     localparam int unsigned FOOTER_BYTES = 2; // last 8 B of cell used to point to next cell
     localparam int unsigned PAYLOAD_BYTES= BLOCK_BYTES-FOOTER_BYTES; // 56 B
     localparam int unsigned BLOCK_BITS = BLOCK_BYTES*8;
+    localparam int unsigned PAYLOAD_BITS = PAYLOAD_BYTES*8;
 
     // footer layout: | next_idx | rsvd | valid | eop |
     typedef struct packed { 
