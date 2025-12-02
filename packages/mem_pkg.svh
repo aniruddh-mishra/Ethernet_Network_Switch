@@ -13,4 +13,4 @@ package mem_pkg;
     logic eop; // end of packet
     logic [2:0] rsvd; // 3 bits of empty
     } footer_t; // total width = 12 + 1 + 3 = 16 bits = 2 bytes
-endpackage : mem_pkg
+endpackage
