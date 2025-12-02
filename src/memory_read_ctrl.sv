@@ -10,7 +10,7 @@ module memory_read_ctrl (
     
     // to memory
     output logic mem_re_o,
-    output logic mem_raddr_o,
+    output logic [ADDR_W-1:0] mem_raddr_o,
     
     // from memory (1 cycle later)
     input logic mem_rvalid_i,
@@ -26,7 +26,10 @@ module memory_read_ctrl (
     logic [BLOCK_BITS-1:0] mem_rdata;
     logic mem_rvalid;
 
-    footer_t footer;
+    footer_t footer; 
+
+    logic [2:0] rsvd_unused;
+    assign rsvd_unused = footer.rsvd;
 
     assign footer = footer_t'(mem_rdata[15:0]);
 
@@ -37,7 +40,7 @@ module memory_read_ctrl (
     assign data_valid_o = mem_rvalid;
     assign data_end_o = footer.eop;
 
-    always_ff @(posedge clock or negedge rst_n) begin
+    always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
         end
         else begin
