@@ -1,4 +1,6 @@
-module address_table (
+module address_table #(
+    parameter int NUM_PORTS = 4
+)(
     input logic clk, rst_n,
 
     input logic learn_req_i,
@@ -13,7 +15,6 @@ module address_table (
 );
 
 import address_table_pkg::*;
-import switch_pkg::*;
 
 logic [$clog2(MAX_HIT)-1:0] table_hits [NUM_ENTRIES-1:0];
 logic [47:0] table_addresses [NUM_ENTRIES-1:0];

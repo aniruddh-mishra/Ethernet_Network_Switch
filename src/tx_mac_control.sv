@@ -16,9 +16,9 @@ module tx_mac_control (
     output logic [$clog2(VOQ_DEPTH)-1:0] mem_ptr_o, // ptr given to mem
 
     // VOQ signals
-    output logic voq_ready_o, // always high when ready to start frame
     input logic voq_valid_i, // indicates VOQ has valid start ptr
-    input logic [$clog2(VOQ_DEPTH)-1:0] voq_ptr_i
+    input logic [$clog2(VOQ_DEPTH)-1:0] voq_ptr_i,
+    output logic voq_ready_o // always high when ready to start frame
 );
 // import params and crc32 function
 import rx_tx_pkg::*;
