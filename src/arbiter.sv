@@ -20,7 +20,7 @@ module arbiter #(
     output logic [BLOCK_BITS-1:0] mem_wdata_o,
     //// Memory write port arbitration ////
 
-    //// Free list arbitration ////
+    //// Free list allocation arbitration ////
     // from memory write controller
     input logic [N-1:0] fl_alloc_req_i,
     
@@ -34,7 +34,7 @@ module arbiter #(
     // from fl
     input logic fl_alloc_gnt_i,
     input logic [ADDR_W-1:0] fl_alloc_block_idx_i,
-    //// Free list arbitration ////
+    //// Free list allocation arbitration ////
 
     //// Address learn table arbitration ////
     // From rx mac control
@@ -91,28 +91,31 @@ module arbiter #(
     end
     //// Memory write port arbitration ////
 
-    //// Free list arbitration ////
-    logic [N-1:0] local_fl_alloc_req;
+    //// Free list allocation arbitration ////
+    logic [$clog2(N)-1:0] cur_fl_alloc_port; // allocations must happen in order
+    logic [N-1:0] fl_alloc_req_latched;
 
-    assign fl_alloc_req_o = fl_alloc_req_i[cur];
-    assign fl_alloc_block_idx_o[cur] = fl_alloc_block_idx_i;
+    assign fl_alloc_req_o = fl_alloc_req_i[cur_fl_alloc_port];
+    assign fl_alloc_block_idx_o[cur_fl_alloc_port] = fl_alloc_block_idx_i;
     
     always_comb begin
-        fl_alloc_gnt_o = 0; 
-
-        if (local_fl_alloc_req[cur])
-            fl_alloc_gnt_o[cur] = fl_alloc_gnt_i;
+        fl_alloc_gnt_o = 0;
+        fl_alloc_gnt_o[cur_fl_alloc_port] = fl_alloc_gnt_i;
     end
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            local_fl_alloc_req <= 0;
+            cur_fl_alloc_port <= 0;
+            fl_alloc_req_latched <= 0;
         end
         else begin
-            local_fl_alloc_req <= fl_alloc_req_i;
+            fl_alloc_req_latched <= fl_alloc_req_i;
+
+            if (fl_alloc_req_latched[cur_fl_alloc_port] && fl_alloc_gnt_i)
+                cur_fl_alloc_port <= cur_fl_alloc_port + 1;
         end
     end
-    //// Free list arbitration ////
+    //// Free list allocation arbitration ////
 
     //// Address learn table arbitration ////
     assign port_o = cur;
@@ -129,9 +132,12 @@ module arbiter #(
 
     always_comb begin
         mem_rvalid_o = 0; 
+        mem_rdata_o = 0;
 
-        if (local_mem_re[cur])
+        if (local_mem_re[cur]) begin
             mem_rvalid_o[cur] = mem_rvalid_i;
+            mem_rdata_o[cur] = mem_rdata_i;
+        end
     end
 
     always_ff @(posedge clk or negedge rst_n) begin

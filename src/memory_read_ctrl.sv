@@ -22,11 +22,10 @@ module memory_read_ctrl (
     output logic data_end_o
 );    
     import mem_pkg::*;
+    footer_t footer; 
 
     logic [BLOCK_BITS-1:0] mem_rdata;
     logic mem_rvalid;
-
-    footer_t footer; 
 
     logic [2:0] rsvd_unused;
     assign rsvd_unused = footer.rsvd;
@@ -40,14 +39,18 @@ module memory_read_ctrl (
     assign data_valid_o = mem_rvalid;
     assign data_end_o = footer.eop;
 
+
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
+            mem_rdata <= 0;
+            mem_rvalid <= 0;
         end
         else begin
             mem_rvalid <= mem_rvalid_i;
 
-            if (mem_rvalid_i) 
+            if (mem_rvalid_i) begin
                 mem_rdata <= mem_rdata_i;
+            end
         end
     end
 
