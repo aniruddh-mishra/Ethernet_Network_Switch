@@ -12,7 +12,7 @@ module memory_write_ctrl (
 
     // iterface with free list
     output logic fl_alloc_req_o,
-    input logic fl_alloc_gnt,
+    input logic fl_alloc_gnt_i,
     input logic [ADDR_W-1:0] fl_alloc_block_idx_i,
 
     // to memory
@@ -34,25 +34,33 @@ module memory_write_ctrl (
     logic frame_allocated;
     logic next_frame_allocated;
 
-    assign fl_alloc_req_o = !frame_allocated || !next_frame_allocated;
-
     // locals
     state_t state, state_n;
     footer_t footer;
 
     logic [PAYLOAD_BITS-1:0] payload_reg;
-    logic [$clog2(BLOCK_BYTES)-1:0] beat_cnt; // 7 beats per payload, last beat is for footer
+    logic [$clog2(BLOCK_BYTES)-1:0] beat_cnt;
     logic [ADDR_W-1:0] curr_idx; // current block idx
     logic [ADDR_W-1:0] next_idx; // used for footer
 
     logic mem_trans_success; // cycle delayed
 
-    logic start_addr;
+    logic [ADDR_W-1:0] start_addr;
     logic [ADDR_W-1:0] frame_cnt;
 
     // not ready if waiting for frame allocation
     assign data_ready_o = state != WAIT && !(state == WRITE_FOOTER && !mem_trans_success);
     assign start_addr_o = start_addr;
+
+    always_comb begin
+    fl_alloc_req_o = 1'b0;
+
+    if (state != IDLE) begin
+        fl_alloc_req_o = (!frame_allocated && !fl_alloc_gnt_i)   ||
+                       (!frame_allocated && !next_frame_allocated) ||
+                       (!fl_alloc_gnt_i && !next_frame_allocated);
+        end
+    end
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -76,13 +84,13 @@ module memory_write_ctrl (
             mem_wdata_o <= 0;
 
             if (state != IDLE) begin                
-                if (!frame_allocated && fl_alloc_gnt) begin
+                if (!frame_allocated && fl_alloc_gnt_i) begin
                     curr_idx <= fl_alloc_block_idx_i;
                     frame_allocated <= 1;
                     if (frame_cnt == 0)
                         start_addr <= fl_alloc_block_idx_i;
                 end
-                if (frame_allocated && !next_frame_allocated && fl_alloc_gnt) begin
+                if (frame_allocated && !next_frame_allocated && fl_alloc_gnt_i) begin
                     next_idx <= fl_alloc_block_idx_i;
                     next_frame_allocated <= 1;
                 end
@@ -151,7 +159,7 @@ module memory_write_ctrl (
             end
 
             WRITE_PAYLOAD: begin
-                if (data_valid_i && ({26'b0, beat_cnt} == PAYLOAD_BYTES))
+                if (data_valid_i && ({26'b0, beat_cnt} == PAYLOAD_BYTES - 1))
                     state_n = (frame_allocated && next_frame_allocated) ? WRITE_FOOTER : WAIT;
             end
 
