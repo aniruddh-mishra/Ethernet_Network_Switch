@@ -14,6 +14,8 @@ module address_table #(
     output logic read_port_valid_o
 );
 
+import address_table_pkg::*;
+
 logic [$clog2(MAX_HIT)-1:0] table_hits [NUM_ENTRIES-1:0];
 logic [47:0] table_addresses [NUM_ENTRIES-1:0];
 logic [$clog2(NUM_PORTS)-1:0] table_ports [NUM_ENTRIES-1:0];
@@ -57,13 +59,13 @@ always_ff @(posedge clk or negedge rst_n) begin
                 if (table_addresses[i] == read_address_i) begin
                     read_port_o <= table_ports[i];
                     read_port_valid_o <= 1'b1;
-                    if (i != {{(32-$clog2(NUM_ENTRIES)){1'b0}}, next_index} && !address_learn_exists && learn_req_i) begin // Saturation Counter
-                        if ({{(32-$clog2(MAX_HIT)){1'b0}}, table_hits[i]} != (NUM_ENTRIES - 1)) table_hits[i] <= table_hits[i] + 1;
+                    if (i[$clog2(NUM_ENTRIES)-1:0] != next_index && !address_learn_exists && learn_req_i) begin // Saturation Counter
+                        if (table_hits[i] != (NUM_ENTRIES[$clog2(MAX_HIT)-1:0] - 1)) table_hits[i] <= table_hits[i] + 1;
                         else table_hits[i] <= (NUM_ENTRIES[$clog2(MAX_HIT)-1:0] - 1);
                     end
                 end
-                else if (i != {{(32-$clog2(NUM_ENTRIES)){1'b0}}, next_index} && !address_learn_exists && learn_req_i) begin
-                    if ({{(32-$clog2(MAX_HIT)){1'b0}}, table_hits[i]} != 0) table_hits[i] <= table_hits[i] - 1;
+                else if (i[$clog2(NUM_ENTRIES)-1:0] != next_index && !address_learn_exists && learn_req_i) begin
+                    if (table_hits[i] != 0) table_hits[i] <= table_hits[i] - 1;
                     else table_hits[i] <= 0;
                 end
             end
