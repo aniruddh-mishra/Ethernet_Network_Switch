@@ -57,14 +57,12 @@ typedef enum logic [1:0] {IDLE, PREAMBLE, HEADER, PAYLOAD} state_t;
 
 state_t current_state, next_state;
 
-logic [31:0] crc_reg, next_crc_reg;
 logic [4:0] preamble_header_ctr, next_preamble_header_ctr; // preamble = 8 bytes, header = 6 + 6 + 2 bytes, total = 22 bytes
 logic prev_fifo_rd_en; // needed b/c 1st cycle: req read, 2nd cycle: check data
 logic [5:0][7:0] next_mac_dst_addr_o, next_mac_src_addr_o;
 logic [DATA_WIDTH-1:0] next_frame_data_o;
 logic next_frame_valid_o;
 logic next_frame_sof_o; logic next_frame_eof_o; logic next_frame_error_o;
-logic [1:0] eof_ctr, next_eof_ctr; // stall for last byte of data after dv goes low
 
 // output status and debug signals
 logic [31:0] next_crc_error_count; 
@@ -86,6 +84,27 @@ end
 assign rx_dv = gmii_rx_dv_i_sync[1]; 
 assign rx_er = gmii_rx_er_i_sync[1];
 
+// crc logic
+logic [31:0] crc_reg, next_crc_reg;
+// instead of looking for CRC_32 constant, create a 4-deep buffer for CRC and 3-deep buffer for data to compare FCS vs CRC before FCS
+/*
+    when (!rx_dv && prev_prev_fifo_rd_en), 
+    crc_buffer = {crc after final data, crc after FCS byte 1, crc after FCS byte 2, crc after FCS byte 3}, crc_reg = crc after FCS byte 4
+    data_buffer = {FCS byte 1, FCS byte 2, FCS byte 3}, frame_data_o = FCS byte 4
+*/
+logic [3:0][31:0] crc_buffer;
+logic [2:0][7:0] data_buffer;
+logic prev_prev_fifo_rd_en;
+always_ff @(posedge switch_clk) begin
+    prev_prev_fifo_rd_en <= prev_fifo_rd_en;
+    if (prev_prev_fifo_rd_en && rx_dv && frame_grant_i) begin // only update when crc_reg and frame_data_o have just been updated with valid results, except for final time (!rx_dv) or frozen (!frame_grant_i)
+        crc_buffer <= {crc_buffer[2:0], crc_reg}; // crc reg is clocked already, this stores 5 total clocked values --> needed for crc before all 4 FCS bytes
+        data_buffer <= {data_buffer[1:0], frame_data_o}; // frame_data_o is also clocked, only 4 values needed for FCS
+        // $display("[%0t] DUT CRC buffer updated: %h %h %h %h", $time, crc_buffer[2], crc_buffer[1], crc_buffer[0], crc_reg);
+        // $display("[%0t] DUT Data buffer updated: %h %h %h", $time, data_buffer[1], data_buffer[0], frame_data_o);
+    end
+end
+
 always_comb begin
     // default values
     next_state = current_state;
@@ -97,7 +116,6 @@ always_comb begin
     next_frame_data_o = frame_data_o;
     next_frame_eof_o = 1'b0; next_frame_sof_o = 1'b0; // default false
     next_frame_error_o = rx_er || frame_error_o; // sticky error during frame
-    next_eof_ctr = eof_ctr;
     
     // debug
     next_crc_error_count = crc_error_count;
@@ -109,7 +127,6 @@ always_comb begin
         IDLE: begin // assume IFG is not violated from sender
             next_crc_reg = 32'hFFFFFFFF;
             next_frame_error_o = 1'b0; // resets frame error which stays high during frame
-            next_eof_ctr = 0; // reset eof ctr
             if (!fifo_empty) fifo_rd_en = 1'b1; 
             if (prev_fifo_rd_en) begin
                 if (fifo_dout == PREAMBLE_BYTE) begin
@@ -135,9 +152,13 @@ always_comb begin
             end
         end
         HEADER: begin // parse header bytes for MAC addresses
-            if (!fifo_empty && frame_grant_i) fifo_rd_en = 1'b1;
+            if (!fifo_empty && frame_grant_i) begin
+                fifo_rd_en = 1'b1; 
+                if (frame_grant_i)$display("Reading FIFO in HEADER state");
+            end 
             if (prev_fifo_rd_en) begin
                 next_crc_reg = crc32_next(fifo_dout, crc_reg);
+                // $display("[%0t] DUT in-progress CRC: %h", $time, next_crc_reg);
 
                 if (preamble_header_ctr == 8) begin
                     next_frame_sof_o = 1'b1;
@@ -151,8 +172,10 @@ always_comb begin
                 //     next_mac_type = {mac_type[0], fifo_dout};
                 // end
                 if (preamble_header_ctr == 21) next_state = PAYLOAD;
+                if (frame_grant_i) $display("Incrementing preamble_header_ctr to %0d in HEADER state", preamble_header_ctr + 1);
                 next_preamble_header_ctr = preamble_header_ctr + 1;
                 next_frame_data_o = fifo_dout;
+                if (frame_grant_i) $display("Sending data %h in HEADER state", fifo_dout);
                 next_frame_valid_o = 1'b1;
             end
         end
@@ -160,11 +183,12 @@ always_comb begin
             if (!fifo_empty && frame_grant_i) fifo_rd_en = 1'b1;
             if (prev_fifo_rd_en) begin
                 next_crc_reg = crc32_next(fifo_dout, crc_reg);
+                // $display("[%0t] DUT in-progress CRC: %h", $time, next_crc_reg);
                 next_frame_data_o = fifo_dout;
                 next_frame_valid_o = 1'b1;
-            end else if (!rx_dv && (eof_ctr == 3)) begin // sender has finished sending frame + we have read all data
-                next_crc_reg = ~crc_reg; // invert for final CRC check
-                if ((next_crc_reg) != CRC32_CONSTANT) begin // final invert step
+            end else if (!rx_dv && prev_prev_fifo_rd_en) begin // sender has finished sending frame + we have read all data --> don't end early before last data
+                $display("[%0t] Final DUT test, calc CRC %h vs exp CRC %h", $time, crc_buffer[3], {data_buffer, frame_data_o});
+                if ((crc_buffer[3]) != {data_buffer, frame_data_o}) begin
                     next_frame_error_o = 1'b1; // allow payload to cut through, perform CRC calculations as data arrives, flag error at end
                     // update debug ctrs
                     next_crc_error_count = crc_error_count + 1;
@@ -174,7 +198,6 @@ always_comb begin
                 next_state = IDLE;
                 next_rx_frame_count = rx_frame_count + 1; // update debug ctrs
             end
-            if (!rx_dv && (eof_ctr != 3)) next_eof_ctr = eof_ctr + 1; // saturating count to 3
         end
         default: next_state = IDLE;
     endcase
@@ -193,7 +216,6 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         preamble_header_ctr <= 0;
         mac_dst_addr_o <= 0;
         mac_src_addr_o <= 0;
-        eof_ctr <= 0;
 
         // debug
         crc_error_count <= 0;
@@ -213,15 +235,22 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
             mac_dst_addr_o <= next_mac_dst_addr_o;
             mac_src_addr_o <= next_mac_src_addr_o;
             crc_reg <= next_crc_reg;
-            eof_ctr <= next_eof_ctr;
             
             // debug
             crc_error_count <= next_crc_error_count;
             rx_error_count <= next_rx_error_count;
             rx_frame_count <= next_rx_frame_count;
-        end else if (!rx_dv) begin
-            current_state <= IDLE; // if frame ended while mem backlogged, reset to IDLE
+        end else begin
+            if (!frame_grant_i && fifo_rd_en) prev_fifo_rd_en <= 1'b1; // the only case this will be true is if fifo_rd_en asserts on the same cycle grant is deasserted, so keep it high to not lose this byte
+            if (!rx_dv) begin
+                current_state <= IDLE; // if frame ended while mem backlogged, reset to IDLE, set error and eof for one cycle
+                frame_error_o = ((current_state == IDLE) || (current_state == PREAMBLE)) ? 1'b0 : 1'b1; // mark error + eof so mem knows frame ended
+                frame_eof_o = ((current_state == IDLE) || (current_state == PREAMBLE)) ? 1'b0 : 1'b1;
+                rx_frame_count = rx_frame_count + 1; 
+            end
         end 
+
+        if (!frame_grant_i) $display("[%0t] frame_grant_i deasserted", $time);
 
         if (fifo_empty) fifo_underflow_count <= fifo_underflow_count + 1;
     end

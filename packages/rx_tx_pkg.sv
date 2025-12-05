@@ -19,8 +19,10 @@ package rx_tx_pkg;
         when including FCS in the CRC calculation (since it would be difficult to exclude the FCS bytes themselves without sacrificing speed), the CRC of the entire frame (data + FCS) should equal 0xC704DD7B
         this only occurs when there are no errors in the data or FCS transmitted
         this is due to the properties of the polynomial division used in CRC calculations, where after all data is sent, the CRC_reg should equal the FCS, and thus the final CRC (data + FCS) equals a known constant
+
+        HOWEVER: decided to instead do more robust buffering to check CRC before processing FCS bytes, so this constant is no longer needed
     */
-    localparam CRC32_CONSTANT = 32'h4248_02E9;
+    // localparam CRC32_CONSTANT = 32'h4248_02E9;
     // localparam CRC32_CONSTANT = 32'hC704DD7B; // final XOR value
     /* 
         function that computes the next CRC-32 value,
@@ -48,7 +50,6 @@ package rx_tx_pkg;
                 crc = crc >> 1;
             end
         end
-        
         return crc;
     endfunction
 endpackage
