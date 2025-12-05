@@ -3,7 +3,7 @@ module tb_fl;
 
     import mem_pkg::*;
 
-    localparam int NBITS = $clog2(NUM_BLOCKS);
+    localparam int NBITS = ADDR_W;
 
     // DUT interface
     logic clk;

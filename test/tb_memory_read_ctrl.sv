@@ -2,7 +2,7 @@ module tb_memory_read_ctrl;
 
     import mem_pkg::*;
 
-    localparam int NUM_CHAIN_BLOCKS = 10;
+    localparam int NUM_CHAIN_BLOCKS = 8;
     localparam int FOOTER_BITS      = $bits(footer_t);
 
     // Clock / reset
@@ -149,16 +149,16 @@ module tb_memory_read_ctrl;
         int cycle_count;
 
         // Contiguous block indices: 0,1,2,...,9
-        chain[0] = 12'd37;
-        chain[1] = 12'd905;
-        chain[2] = 12'd128;
-        chain[3] = 12'd2047;
-        chain[4] = 12'd319;
-        chain[5] = 12'd4093;
-        chain[6] = 12'd777;
-        chain[7] = 12'd2560;
-        chain[8] = 12'd1234;
-        chain[9] = 12'd3001;
+        chain[0] = 4;
+        chain[1] = 48;
+        chain[2] = 1;
+        chain[3] = 19;
+        chain[4] = 21;
+        chain[5] = 25;
+        chain[6] = 34;
+        chain[7] = 35;
+
+        
 
         // Initial values
         rst_n         = 1'b0;
