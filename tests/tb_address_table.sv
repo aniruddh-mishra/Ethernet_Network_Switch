@@ -19,7 +19,7 @@ module tb_address_table;
     logic read_port_valid_o;
 
     // instantiate DUT
-    address_table dut (
+    address_table #(.NUM_PORTS(NUM_PORTS)) dut (
         .clk(clk), .rst_n(rst_n),
         .learn_req_i(learn_req_i), .learn_address_i(learn_address_i), .learn_port_i(learn_port_i),
         .read_req_i(read_req_i), .read_address_i(read_address_i),
@@ -53,6 +53,9 @@ module tb_address_table;
     begin
         read_address_i = addr;
         @(posedge clk) read_req_i = 1;
+        #1; // tiny settle
+        if (read_port_valid_o) $display("Read: addr %04x -> port %0d (valid)", addr, read_port_o);
+        else $display("Read: addr %04x -> no entry", addr);
         @(posedge clk) read_req_i = 0;
         @(posedge clk);
     end
@@ -90,10 +93,8 @@ module tb_address_table;
         //    make address (base+1) the least-read (0 reads), (base+2) -> 1 read, ... (base+16) -> 15 reads
         for (i = 1; i <= 16; i = i + 1) begin
             rcount = i - 1; // number of reads for entry i
-            repeat (rcount[31:0] + 3) begin
+            repeat (rcount[31:0]) begin
                 do_read(base + i);
-                if (read_port_valid_o) $display("Read %0d: addr %04x -> port %0d (valid)", rcount, base + i, read_port_o);
-                else $display("Read %0d: addr %04x -> no entry", rcount, base + i);
             end
         end
 
@@ -112,8 +113,6 @@ module tb_address_table;
         // 4) Verify which of original addresses remain or were evicted
         for (i = 1; i <= 20; i = i + 1) begin
             do_read(base + i);
-            if (read_port_valid_o) $display("After eviction: addr %04x -> port %0d", base + i, read_port_o);
-            else $display("After eviction: addr %04x -> (evicted or absent)", base + i);
         end
 
         #20;

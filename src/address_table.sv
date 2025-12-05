@@ -14,6 +14,8 @@ module address_table #(
     output logic read_port_valid_o
 );
 
+import address_table_pkg::*;
+
 logic [$clog2(MAX_HIT)-1:0] table_hits [NUM_ENTRIES-1:0];
 logic [47:0] table_addresses [NUM_ENTRIES-1:0];
 logic [$clog2(NUM_PORTS)-1:0] table_ports [NUM_ENTRIES-1:0];
