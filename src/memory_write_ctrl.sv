@@ -43,13 +43,11 @@ module memory_write_ctrl (
     logic [ADDR_W-1:0] curr_idx; // current block idx
     logic [ADDR_W-1:0] next_idx; // used for footer
 
-    logic mem_trans_success; // cycle delayed
-
     logic [ADDR_W-1:0] start_addr;
     logic [ADDR_W-1:0] frame_cnt;
 
     // not ready if waiting for frame allocation
-    assign data_ready_o = state != WAIT && !(state == WRITE_FOOTER && !mem_trans_success);
+    assign data_ready_o = state != WAIT && !(state == WRITE_FOOTER && !mem_ready_i);
     assign start_addr_o = start_addr;
 
     always_comb begin
@@ -71,14 +69,11 @@ module memory_write_ctrl (
             next_idx <= 0;
             frame_allocated <= 0;
             next_frame_allocated <= 0;
-            mem_trans_success <= 0;
             start_addr <= 0;
             frame_cnt <= 0;
         end
         else begin
             state <= state_n;
-            mem_trans_success <= mem_ready_i;
-
             mem_we_o <= 0;
             mem_addr_o <= 0;
             mem_wdata_o <= 0;
@@ -169,7 +164,7 @@ module memory_write_ctrl (
             end
 
             WRITE_FOOTER: begin
-                if (mem_trans_success) // mem transaction success
+                if (mem_ready_i) // mem transaction success
                     state_n = data_end_i ? IDLE : WRITE_PAYLOAD;
                 // TODO: FIX SINGLE FRAME LEAK IF WE GO TO IDLE STATE (LOW PRIORITY)
             end

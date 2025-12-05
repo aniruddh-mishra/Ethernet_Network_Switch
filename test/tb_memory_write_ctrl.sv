@@ -84,16 +84,18 @@ module tb_memory_write_ctrl;
         end
     end
 
-    //------------------------
-    // Memory model: always ready
+
+    // Memory model: random ~25% ready
     //------------------------
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             mem_ready_i <= 1'b0;
         end else begin
-            mem_ready_i <= 1'b1;
+            // ~25% chance ready each cycle
+            mem_ready_i <= ($urandom_range(0, 3) == 0);
         end
     end
+
 
     //------------------------
     // Monitor memory writes
@@ -200,7 +202,7 @@ module tb_memory_write_ctrl;
         end
 */
         // Let everything drain
-        repeat (200) @(posedge clk);
+        repeat (1000) @(posedge clk);
 
         $display("=== Simulation done. Total memory writes: %0d ===", write_count);
         $finish;

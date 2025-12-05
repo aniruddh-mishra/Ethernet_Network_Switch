@@ -83,7 +83,7 @@ module arbiter #(
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            cur <= 0;
+            cur <= 3;
         end
         else begin
             cur <= cur + 1;
@@ -93,25 +93,21 @@ module arbiter #(
 
     //// Free list allocation arbitration ////
     logic [$clog2(N)-1:0] cur_fl_alloc_port; // allocations must happen in order
-    logic [N-1:0] fl_alloc_req_latched;
-
-    assign fl_alloc_req_o = fl_alloc_req_i[cur_fl_alloc_port];
-    assign fl_alloc_block_idx_o[cur_fl_alloc_port] = fl_alloc_block_idx_i;
     
+    assign fl_alloc_block_idx_o[cur_fl_alloc_port] = fl_alloc_block_idx_i;
+    assign fl_alloc_req_o = fl_alloc_gnt_i ? fl_alloc_req_i[cur_fl_alloc_port+1] : fl_alloc_req_i[cur_fl_alloc_port]; 
+
     always_comb begin
-        fl_alloc_gnt_o = 0;
+        fl_alloc_gnt_o = 0; 
         fl_alloc_gnt_o[cur_fl_alloc_port] = fl_alloc_gnt_i;
     end
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             cur_fl_alloc_port <= 0;
-            fl_alloc_req_latched <= 0;
         end
         else begin
-            fl_alloc_req_latched <= fl_alloc_req_i;
-
-            if (fl_alloc_req_latched[cur_fl_alloc_port] && fl_alloc_gnt_i)
+            if (fl_alloc_req_i[cur_fl_alloc_port] && fl_alloc_gnt_i)
                 cur_fl_alloc_port <= cur_fl_alloc_port + 1;
         end
     end
@@ -125,27 +121,19 @@ module arbiter #(
     assign eop_o = eop_i[cur];
 
     //// memory read control arbitration ////
-    logic [N-1:0] local_mem_re;
+    logic [$clog2(N)-1:0] cur_mem_read_port;
 
-    assign mem_re_o = mem_re_i[cur];
-    assign mem_raddr_o = mem_raddr_i[cur];
-
-    always_comb begin
-        mem_rvalid_o = 0; 
-        mem_rdata_o = 0;
-
-        if (local_mem_re[cur]) begin
-            mem_rvalid_o[cur] = mem_rvalid_i;
-            mem_rdata_o[cur] = mem_rdata_i;
-        end
-    end
+    assign mem_rvalid_o[cur_mem_read_port] = mem_rvalid_i;
+    assign mem_rdata_o[cur_mem_read_port] = mem_rdata_i;
+    assign mem_raddr_o = mem_rvalid_i ? mem_raddr_i[cur_mem_read_port + 1] : mem_raddr_i[cur_mem_read_port];
+    assign mem_re_o = mem_rvalid_i ? mem_re_i[cur_mem_read_port + 1] : mem_re_i[cur_mem_read_port];
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            local_mem_re <= 0;
+            cur_mem_read_port <= 0;
         end
         else begin
-            local_mem_re <= mem_re_i;
+            if (mem_rvalid_i) cur_mem_read_port <= cur_mem_read_port + 1;
         end
     end
 endmodule
