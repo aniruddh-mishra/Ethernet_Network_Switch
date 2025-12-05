@@ -53,12 +53,12 @@ module memory_write_ctrl (
     assign start_addr_o = start_addr;
 
     always_comb begin
-    fl_alloc_req_o = 1'b0;
+        fl_alloc_req_o = 1'b0;
 
-    if (state != IDLE) begin
-        fl_alloc_req_o = (!frame_allocated && !fl_alloc_gnt_i)   ||
-                       (!frame_allocated && !next_frame_allocated) ||
-                       (!fl_alloc_gnt_i && !next_frame_allocated);
+        if (state != IDLE) begin
+            fl_alloc_req_o = (!frame_allocated && !fl_alloc_gnt_i)   ||
+                        (!frame_allocated && !next_frame_allocated) ||
+                        (!fl_alloc_gnt_i && !next_frame_allocated);
         end
     end
 
