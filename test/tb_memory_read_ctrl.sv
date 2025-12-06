@@ -24,6 +24,10 @@ module tb_memory_read_ctrl;
     logic                  data_valid_o;
     logic                  data_end_o;
 
+    // interface with free list to free
+    logic                  free_req_o;
+    logic [ADDR_W-1:0]     free_block_idx_o;
+
     // SRAM interface (muxed between programming phase and read_ctrl)
     logic                  mem_we_prog;
     logic                  mem_re_prog;
@@ -39,11 +43,14 @@ module tb_memory_read_ctrl;
     // One-cycle valid pipeline from memory
     logic mem_rvalid_pipe;
 
-    // Chain of block indices (now contiguous)
+    // Chain of block indices
     logic [ADDR_W-1:0] chain [0:NUM_CHAIN_BLOCKS-1];
 
     // Phase control: 1 = programming SRAM, 0 = running read controller
     logic program_mode;
+
+    // Monitor bookkeeping
+    int blocks_seen;
 
     // --------------------------
     // DUTs
@@ -60,6 +67,7 @@ module tb_memory_read_ctrl;
     memory_read_ctrl dut (
         .clk          (clk),
         .rst_n        (rst_n),
+
         .re_i         (re_i),
         .start        (start),
         .start_addr_i (start_addr_i),
@@ -72,7 +80,10 @@ module tb_memory_read_ctrl;
 
         .data_o       (data_o),
         .data_valid_o (data_valid_o),
-        .data_end_o   (data_end_o)
+        .data_end_o   (data_end_o),
+
+        .free_req_o       (free_req_o),
+        .free_block_idx_o (free_block_idx_o)
     );
 
     // --------------------------
@@ -89,10 +100,10 @@ module tb_memory_read_ctrl;
     // --------------------------
     // SRAM muxing and valid pipeline
     // --------------------------
-    assign mem_we_mux   = program_mode ? mem_we_prog   : 1'b0;
-    assign mem_re_mux   = program_mode ? mem_re_prog   : mem_re_o;
-    assign mem_addr_mux = program_mode ? mem_addr_prog : mem_raddr_o;
-    assign mem_wdata_mux= mem_wdata_prog;
+    assign mem_we_mux    = program_mode ? mem_we_prog   : 1'b0;
+    assign mem_re_mux    = program_mode ? mem_re_prog   : mem_re_o;
+    assign mem_addr_mux  = program_mode ? mem_addr_prog : mem_raddr_o;
+    assign mem_wdata_mux = mem_wdata_prog;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -106,9 +117,16 @@ module tb_memory_read_ctrl;
     assign mem_rdata_i  = mem_rdata;
 
     // --------------------------
+    // Dummy use of free signals (avoid unused warnings)
+    // --------------------------
+    logic unused_free_reduce;
+    always_comb begin
+        unused_free_reduce = free_req_o ^ ^free_block_idx_o;
+    end
+
+    // --------------------------
     // Monitor: check data_o footers
     // --------------------------
-    int blocks_seen;
     /*
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -116,20 +134,16 @@ module tb_memory_read_ctrl;
         end else begin
             if (data_valid_o) begin
                 footer_t f;
-                f = footer_t'(data_o[15:0]);
+                f = footer_t'(data_o[FOOTER_BITS-1:0]);
 
                 $display("[%0t] READ block #%0d: footer.next_idx=%0d eop=%0b data_end_o=%0b",
                          $time, blocks_seen, f.next_idx, f.eop, data_end_o);
 
                 if (blocks_seen < NUM_CHAIN_BLOCKS-1) begin
-                    // For non-last blocks, eop must be 0 and next_idx must match next link in chain
-                    if (f.eop !== 1'b0)
-                       // $error("Block %0d: expected eop=0", blocks_seen);
                     if (f.next_idx !== chain[blocks_seen+1])
                         $error("Block %0d: expected next_idx=%0d, got %0d",
                                blocks_seen, chain[blocks_seen+1], f.next_idx);
                 end else begin
-                    // Last block: eop must be 1
                     if (f.eop !== 1'b1)
                         $error("Last block: expected eop=1");
                 end
@@ -148,17 +162,14 @@ module tb_memory_read_ctrl;
         int max_cycles;
         int cycle_count;
 
-        // Contiguous block indices: 0,1,2,...,9
         chain[0] = 4;
         chain[1] = 48;
         chain[2] = 1;
         chain[3] = 19;
         chain[4] = 21;
-        chain[5] = 25;
+        chain[5] = 61;
         chain[6] = 34;
         chain[7] = 35;
-
-        
 
         // Initial values
         rst_n         = 1'b0;
@@ -168,10 +179,10 @@ module tb_memory_read_ctrl;
         start         = 1'b0;
         start_addr_i  = '0;
 
-        mem_we_prog   = 1'b0;
-        mem_re_prog   = 1'b0;
-        mem_addr_prog = '0;
-        mem_wdata_prog= '0;
+        mem_we_prog    = 1'b0;
+        mem_re_prog    = 1'b0;
+        mem_addr_prog  = '0;
+        mem_wdata_prog = '0;
 
         blocks_seen   = 0;
 
@@ -182,17 +193,19 @@ module tb_memory_read_ctrl;
 
         // ----------------------
         // Program SRAM with a linked list of blocks
+        // Footer is now 1 byte at the "last byte" position,
+        // consistent with prior TB convention of placing footer in LSBs.
         // ----------------------
         $display("=== Programming memory blocks (linked list) ===");
         mem_we_prog = 1'b1;
 
         for (i = 0; i < NUM_CHAIN_BLOCKS; i++) begin
             footer_t f;
-            logic [15:0] footer_bits;
+            logic [FOOTER_BITS-1:0] footer_bits;
 
             f.next_idx = (i == NUM_CHAIN_BLOCKS-1) ? '0 : chain[i+1];
             f.eop      = (i == NUM_CHAIN_BLOCKS-1);
-            f.rsvd     = 3'b000;
+            f.rsvd     = 1'b0;
 
             footer_bits    = f;
             mem_addr_prog  = chain[i];
@@ -203,26 +216,25 @@ module tb_memory_read_ctrl;
                      $time, i, chain[i], f.next_idx, f.eop);
         end
 
-        mem_we_prog   = 1'b0;
-        mem_addr_prog = '0;
-        mem_wdata_prog= '0;
+        mem_we_prog    = 1'b0;
+        mem_addr_prog  = '0;
+        mem_wdata_prog = '0;
 
         repeat (3) @(posedge clk);
 
         // ----------------------
         // Run read controller
         // ----------------------
-        program_mode  = 1'b0;          // give control of SRAM to read_ctrl
+        program_mode  = 1'b0;
         start_addr_i  = chain[0];
-        re_i          = 1'b1;          // continuous read enable
-        start         = 1'b1;          // start on first block
+        re_i          = 1'b1;
+        start         = 1'b1;
 
         $display("=== Starting read controller from addr %0d ===", chain[0]);
 
         @(posedge clk);
-        start = 1'b0;                 // only first cycle
+        start = 1'b0;
 
-        // Let it run for a fixed number of cycles
         max_cycles  = 200;
         cycle_count = 0;
 

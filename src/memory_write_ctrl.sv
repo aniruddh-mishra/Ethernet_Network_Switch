@@ -100,7 +100,7 @@ module memory_write_ctrl (
 
                     if (data_valid_i && data_begin_i) begin
                         beat_cnt <= 1;
-                        payload_reg <= {488'b0, data_i}; // 488 + 8 = 496 = PAYLOAD_BITS
+                        payload_reg <= {496'b0, data_i}; // 496 + 8 = 504 = PAYLOAD_BITS
                     end
                 end
 
@@ -129,7 +129,7 @@ module memory_write_ctrl (
 
                             if (data_valid_i) begin
                                 beat_cnt <= 1;
-                                payload_reg <= {488'b0, data_i};
+                                payload_reg <= {496'b0, data_i};
                             end
                         end
 

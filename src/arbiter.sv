@@ -66,8 +66,16 @@ module arbiter #(
 
     // to memory read ctrl
     output logic [N-1:0] mem_rvalid_o,
-    output logic [BLOCK_BITS-1:0] mem_rdata_o [N-1:0]
-);
+    output logic [BLOCK_BITS-1:0] mem_rdata_o [N-1:0],
+
+    // freeing logic sent read controller
+    input logic [N-1:0] free_req_i,
+    input logic [ADDR_W-1:0] free_block_idx_i [N-1:0],
+
+    // free signal to fl
+    output logic free_req_o,
+    output logic [ADDR_W-1:0] free_block_idx_o
+);  
     import mem_pkg::*;
     logic [$clog2(N)-1:0] cur;
 
@@ -122,6 +130,9 @@ module arbiter #(
 
     //// memory read control arbitration ////
     logic [$clog2(N)-1:0] cur_mem_read_port;
+
+    assign free_req_o = free_req_i[cur_mem_read_port - 1];
+    assign free_block_idx_o = free_block_idx_i[cur_mem_read_port - 1];
 
     assign mem_rvalid_o[cur_mem_read_port] = mem_rvalid_i;
     assign mem_rdata_o[cur_mem_read_port] = mem_rdata_i;

@@ -146,7 +146,7 @@ module tb_fl;
 
         // 3) Free one index and ensure it comes back
         $display("=== TEST 3: free one, then allocate it back ===");
-        freed_idx = 2048;  // arbitrary valid index
+        freed_idx = 6'd32;  // valid for NUM_BLOCKS=64
         do_free(freed_idx, "free mid index");
 
         do_alloc(idx, 1'b1, "alloc after single free");
@@ -160,7 +160,7 @@ module tb_fl;
 
         // 4) Simultaneous alloc + free (bypass)
         $display("=== TEST 4: simultaneous alloc + free bypass ===");
-        bypass_free_idx = 1200;
+        bypass_free_idx = 6'd17; // valid for NUM_BLOCKS=64
         do_alloc_free_same_cycle(bypass_free_idx, bypass_alloc_idx);
         if (bypass_alloc_idx !== bypass_free_idx) begin
             $error("[%0t] Expected alloc_idx == free_idx in bypass path, got %0d vs %0d",

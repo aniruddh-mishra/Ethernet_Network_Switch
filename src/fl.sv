@@ -20,14 +20,14 @@ module fl (
 
     logic empty, full;
     assign empty = sp == 0;
-    assign full = {19'b0, sp} == NUM_BLOCKS;
+    assign full = {25'b0, sp} == NUM_BLOCKS;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             sp <= NUM_BLOCKS[ADDR_W:0];
             // 0th entry unused
             for (int i = 0; i <= NUM_BLOCKS; i++) begin
-                stack[i] <= i[11:0];
+                stack[i] <= i[ADDR_W-1:0];
             end
         end
         else begin
