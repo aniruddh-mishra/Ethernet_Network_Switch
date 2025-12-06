@@ -16,7 +16,7 @@ module synchronizer (input logic clk, input logic rst_n_in, output logic rst_n_o
 endmodule
 
 /* verilator lint_off DECLFILENAME */
-module clk_div #(parameter int DIVIDE = 4)(input logic clk_in, input logic rst_n, output logic clk_out);
+module clk_div #(parameter int DIVIDE = 3)(input logic clk_in, input logic rst_n, output logic clk_out);
     logic [$clog2(DIVIDE)-1:0] div_ctr, div_ff;
     assign div_ff = DIVIDE[1:0];
 
@@ -25,7 +25,7 @@ module clk_div #(parameter int DIVIDE = 4)(input logic clk_in, input logic rst_n
             div_ctr <= 0;
             clk_out <= 0;
         end else begin
-            if (div_ctr == ((div_ff>>1) - 1)) begin
+            if (div_ctr == (div_ff>>1)) begin
                 clk_out <= ~clk_out;
                 div_ctr <= 0;
             end else begin

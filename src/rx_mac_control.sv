@@ -244,9 +244,9 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
             if (!frame_grant_i && fifo_rd_en) prev_fifo_rd_en <= 1'b1; // the only case this will be true is if fifo_rd_en asserts on the same cycle grant is deasserted, so keep it high to not lose this byte
             if (!rx_dv) begin
                 current_state <= IDLE; // if frame ended while mem backlogged, reset to IDLE, set error and eof for one cycle
-                frame_error_o = ((current_state == IDLE) || (current_state == PREAMBLE)) ? 1'b0 : 1'b1; // mark error + eof so mem knows frame ended
-                frame_eof_o = ((current_state == IDLE) || (current_state == PREAMBLE)) ? 1'b0 : 1'b1;
-                rx_frame_count = rx_frame_count + 1; 
+                frame_error_o <= ((current_state == IDLE) || (current_state == PREAMBLE)) ? 1'b0 : 1'b1; // mark error + eof so mem knows frame ended
+                frame_eof_o <= ((current_state == IDLE) || (current_state == PREAMBLE)) ? 1'b0 : 1'b1;
+                rx_frame_count <= rx_frame_count + 1; 
             end
         end 
 
