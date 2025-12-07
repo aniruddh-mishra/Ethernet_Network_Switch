@@ -2,9 +2,6 @@ package rx_tx_pkg;
     // rx module parameters
     localparam DATA_WIDTH = 8;
 
-    // tx params
-    localparam VOQ_DEPTH = 8;
-
     // ethernet standards
     localparam PREAMBLE_BYTE = 8'h55; // repeated for 7 bytes
     localparam SFD_BYTE = 8'hD5; // 1 byte after preamble
@@ -22,8 +19,11 @@ package rx_tx_pkg;
         when including FCS in the CRC calculation (since it would be difficult to exclude the FCS bytes themselves without sacrificing speed), the CRC of the entire frame (data + FCS) should equal 0xC704DD7B
         this only occurs when there are no errors in the data or FCS transmitted
         this is due to the properties of the polynomial division used in CRC calculations, where after all data is sent, the CRC_reg should equal the FCS, and thus the final CRC (data + FCS) equals a known constant
+
+        HOWEVER: decided to instead do more robust buffering to check CRC before processing FCS bytes, so this constant is no longer needed
     */
-    localparam CRC32_CONSTANT = 32'hC704DD7B; // final XOR value
+    // localparam CRC32_CONSTANT = 32'h4248_02E9;
+    // localparam CRC32_CONSTANT = 32'hC704DD7B; // final XOR value
     /* 
         function that computes the next CRC-32 value,
         given current CRC and new data byte LSB first, transmitting MSB first
@@ -36,54 +36,20 @@ package rx_tx_pkg;
         integer i;
         logic [31:0] crc;
         logic [7:0] data_reflected;
-        // ethernet data comes in lSB first, so reflect byte
+        
+        // Reflect input byte
         data_reflected = {data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]};
-        crc = crc_in ^ (data_reflected << 24);
-        // unrolls into 8 shifts/xors
+        
+        crc = crc_in ^ {24'h0, data_reflected}; // XOR at LSB side
+        
+        // Shift RIGHT with reflected polynomial
         for (i = 0; i < 8; i = i + 1) begin
-            if (crc[31]) begin
-                crc = (crc << 1) ^ CRC32_POLY_REFLECTED;
+            if (crc[0]) begin  // Check LSB
+                crc = (crc >> 1) ^ CRC32_POLY_REFLECTED; // Reflected polynomial
             end else begin
-                crc = crc << 1;
+                crc = crc >> 1;
             end
         end
-        return ~crc; // final inversion step needed(?)
+        return crc;
     endfunction
 endpackage
-
-/* verilator lint_off DECLFILENAME */
-module synchronizer (input logic clk, input logic rst_n_in, output logic rst_n_out);
-    logic sync_ff1, sync_ff2;
-
-    always_ff @(posedge clk or negedge rst_n_in) begin
-        if (!rst_n_in) begin
-            sync_ff1 <= 1'b0;
-            sync_ff2 <= 1'b0;
-        end else begin
-            sync_ff1 <= 1'b1;
-            sync_ff2 <= sync_ff1;
-        end
-    end
-
-    assign rst_n_out = sync_ff2;
-endmodule
-
-/* verilator lint_off DECLFILENAME */
-module clk_div #(parameter int DIVIDE = 4)(input logic clk_in, input logic rst_n, output logic clk_out);
-    logic [$clog2(DIVIDE)-1:0] div_ctr, div_ff;
-    assign div_ff = DIVIDE[1:0];
-
-    always_ff @(posedge clk_in or negedge rst_n) begin
-        if (!rst_n) begin
-            div_ff <= 0;
-            clk_out <= 0;
-        end else begin
-            if (div_ctr == ((div_ff>>1) - 1)) begin
-                clk_out <= ~clk_out;
-                div_ctr <= 0;
-            end else begin
-                div_ctr <= div_ctr + 1;
-            end
-        end
-    end
-endmodule

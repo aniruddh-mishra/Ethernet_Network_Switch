@@ -1,0 +1,35 @@
+// commandline options and file lists
+// Aniruddh Mishra
+// 12/02/2025
+// ----------------------------------
+
+-sverilog
+
+// -y with folder, which contains source files
+-y Ethernet_Network_Switch/src
+-y Ethernet_Network_Switch/packages
+-y Ethernet_Network_Switch/tests
+
+// Tell VCS which file extensions to search for inside -y dirs
++libext+.sv+.svh+.v
+
+// List your files here -------------
+packages/switch_pkg.sv
+packages/rx_tx_pkg.sv
+packages/mem_pkg.sv
+packages/address_table_pkg.sv
+packages/voq_pkg.sv
+
+src/switch.sv
+src/address_table.sv
+src/fl.sv
+src/rx_mac_control.sv
+src/translator.sv
+src/arbiter.sv
+src/sram.sv
+src/async_fifo.sv
+src/memory_write_ctrl.sv
+src/mac_controllers.sv
+src/voq.sv
+
+tests/tb_switch.sv
