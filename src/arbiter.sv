@@ -8,7 +8,7 @@ module arbiter #(
 
     //// Memory write port arbitration ////
     input logic [N-1:0] mem_we_i,
-    input logic [ADDR_W-1:0] mem_addr_i [N-1:0],
+    input logic [ADDR_W-1:0] mem_waddr_i [N-1:0],
     input logic [BLOCK_BITS-1:0] mem_wdata_i [N-1:0],
 
     // output to memory write controller
@@ -16,7 +16,7 @@ module arbiter #(
 
     // output to memory
     output logic mem_we_o,
-    output logic [ADDR_W-1:0] mem_addr_o,
+    output logic [ADDR_W-1:0] mem_waddr_o,
     output logic [BLOCK_BITS-1:0] mem_wdata_o,
     //// Memory write port arbitration ////
 
@@ -81,7 +81,7 @@ module arbiter #(
 
      //// Memory write port arbitration ////
     assign mem_we_o = mem_we_i[cur];
-    assign mem_addr_o = mem_addr_i[cur];
+    assign mem_waddr_o = mem_waddr_i[cur];
     assign mem_wdata_o = mem_wdata_i[cur];
     
     always_comb begin
