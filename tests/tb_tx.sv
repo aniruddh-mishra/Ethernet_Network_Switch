@@ -1,5 +1,3 @@
-`timescale 1ns/1ps
-
 import rx_tx_pkg::*;
 import mem_pkg::*;
 

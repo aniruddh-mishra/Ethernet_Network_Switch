@@ -21,6 +21,10 @@ module tx_mac_control (
     output logic voq_ready_o // always high when ready to start frame
 );
 
+import mem_pkg::*;
+import rx_tx_pkg::*;
+import voq_pkg::*;
+
 // status and debug signals (simulation only)
 logic [31:0] tx_frame_count; // # of frames transmitted
 logic [31:0] mem_stall_count; // # of times mem read ctrl stalled

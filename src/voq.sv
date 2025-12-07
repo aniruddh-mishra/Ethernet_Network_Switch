@@ -7,6 +7,10 @@ module voq (
     output logic ptr_valid_o
 );
 
+import voq_pkg::*;
+import mem_pkg::*;
+import rx_tx_pkg::*;
+
 typedef enum logic[1:0] {STATE_EMPTY, STATE_NORMAL, STATE_FULL} state_t;
 
 state_t state;
