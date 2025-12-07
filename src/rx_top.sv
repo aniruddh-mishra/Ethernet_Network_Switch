@@ -1,17 +1,26 @@
-`timescale 1ns/1ps
-`default_nettype none
-
-module top #(
+module rx_top #(
     parameter int NUM_PORTS = 4
-) ();
+) (
+    // GMII interface
+    input logic gmii_rx_clk_i,
+    input logic [DATA_WIDTH-1:0] gmii_rx_data_i [NUM_PORTS],
+    input logic gmii_rx_dv_i [NUM_PORTS],
+    input logic gmii_rx_er_i [NUM_PORTS],
+
+    // switch's clk domain
+    input logic switch_clk,
+    input logic switch_rst_n
+);
 
     import mem_pkg::*;
+    import rx_tx_pkg::*;
 
     // =========================================================
     // rx_mac_control _o signals (per-port)
     // Prefix: rx_mac_control_
     // Note: naming drops trailing "_o" per your example.
     // =========================================================
+    /* verilator lint_off UNUSEDSIGNAL */
     logic [5:0][7:0]        rx_mac_control_mac_dst_addr   [NUM_PORTS];
     logic [5:0][7:0]        rx_mac_control_mac_src_addr   [NUM_PORTS];
 
@@ -39,13 +48,13 @@ module top #(
     // arbiter _o signals (single instance, N=NUM_PORTS)
     // Prefix: arbiter_
     // =========================================================
-    logic [NUM_PORTS-1:0]  arbiter_mem_gnt;
+    logic                  arbiter_mem_gnt [NUM_PORTS];
 
     logic                  arbiter_mem_we;
     logic [ADDR_W-1:0]     arbiter_mem_waddr;
     logic [BLOCK_BITS-1:0] arbiter_mem_wdata;
 
-    logic [NUM_PORTS-1:0]  arbiter_fl_alloc_gnt;
+    logic                  arbiter_fl_alloc_gnt [NUM_PORTS];
     logic [ADDR_W-1:0]     arbiter_fl_alloc_block_idx [NUM_PORTS];
 
     logic                  arbiter_fl_alloc_req;
@@ -59,7 +68,7 @@ module top #(
     logic                  arbiter_mem_re;
     logic [ADDR_W-1:0]     arbiter_mem_raddr;
 
-    logic [NUM_PORTS-1:0]  arbiter_mem_rvalid;
+    logic                  arbiter_mem_rvalid [NUM_PORTS];
     logic [BLOCK_BITS-1:0] arbiter_mem_rdata [NUM_PORTS];
 
     logic                  arbiter_free_req;
@@ -79,6 +88,30 @@ module top #(
     logic [BLOCK_BITS-1:0] sram_rdata;
 
     // =========================================================
+    // also include signals to drive all irrelvant signals to 0
+    // =========================================================
+    //// Address learn table arbitration ////
+    // From rx mac control
+    logic [47:0] rx_mac_src_addr_i [NUM_PORTS]; assign rx_mac_src_addr_i = '{default:0};
+    logic [47:0] rx_mac_dst_addr_i [NUM_PORTS]; assign rx_mac_dst_addr_i = '{default:0};
+    logic [ADDR_W-1:0] data_start_addr_i [NUM_PORTS]; assign data_start_addr_i = '{default:0};
+    logic eop_i  [NUM_PORTS]; assign eop_i = '{default:0};
+    //// Address learn table arbitration ////
+
+    //// memory read control arbitration ////
+    // from memory read ctrl
+    logic mem_re_i [NUM_PORTS]; assign mem_re_i = '{default:0};
+    logic [ADDR_W-1:0] mem_raddr_i [NUM_PORTS]; assign mem_raddr_i = '{default:0};
+
+    // from memory
+    logic mem_rvalid_i; assign mem_rvalid_i = 0;
+    logic [BLOCK_BITS-1:0] mem_rdata_i; assign mem_rdata_i = 0;
+
+    // freeing logic sent read controller
+    logic free_req_i [NUM_PORTS]; assign free_req_i = '{default:0};
+    logic [ADDR_W-1:0] free_block_idx_i [NUM_PORTS]; assign free_block_idx_i = '{default:0};
+
+    // =========================================================
     // Instances
     // =========================================================
     genvar p;
@@ -88,14 +121,14 @@ module top #(
         for (p = 0; p < NUM_PORTS; p++) begin : GEN_RX_MAC
             rx_mac_control rx_mac_control_u (
                 // GMII interface
-                .gmii_rx_clk_i(),
-                .gmii_rx_data_i(),
-                .gmii_rx_dv_i(),
-                .gmii_rx_er_i(),
+                .gmii_rx_clk_i(gmii_rx_clk_i),
+                .gmii_rx_data_i(gmii_rx_data_i[p]),
+                .gmii_rx_dv_i(gmii_rx_dv_i[p]),
+                .gmii_rx_er_i(gmii_rx_er_i[p]),
 
                 // switch's clk domain
-                .switch_clk(),
-                .switch_rst_n(),
+                .switch_clk(switch_clk),
+                .switch_rst_n(switch_rst_n),
 
                 // outputs to MAC learning/lookup - specific to bytes
                 .mac_dst_addr_o (rx_mac_control_mac_dst_addr[p]),
@@ -116,8 +149,8 @@ module top #(
     generate
         for (p = 0; p < NUM_PORTS; p++) begin : GEN_MEM_WR
             memory_write_ctrl memory_write_ctrl_u (
-                .clk(),
-                .rst_n(),
+                .clk(switch_clk),
+                .rst_n(switch_rst_n),
 
                 // memory write data, 1 byte / 8 bit beats
                 .data_i(rx_mac_control_frame_data[p]),
@@ -147,8 +180,8 @@ module top #(
     arbiter #(
         .N(NUM_PORTS)
     ) arbiter_u (
-        .clk(),
-        .rst_n(),
+        .clk(switch_clk),
+        .rst_n(switch_rst_n),
 
         //// Memory write port arbitration ////
         .mem_we_i(memory_write_ctrl_mem_we),
@@ -175,10 +208,10 @@ module top #(
         //// Free list allocation arbitration ////
 
         //// Address learn table arbitration ////
-        .rx_mac_src_addr_i(),
-        .rx_mac_dst_addr_i(),
-        .data_start_addr_i(),
-        .eop_i(),
+        .rx_mac_src_addr_i(rx_mac_src_addr_i),
+        .rx_mac_dst_addr_i(rx_mac_dst_addr_i),
+        .data_start_addr_i(data_start_addr_i),
+        .eop_i(eop_i),
 
         .port_o           (arbiter_port),
         .rx_mac_src_addr_o(arbiter_rx_mac_src_addr),
@@ -188,20 +221,20 @@ module top #(
         //// Address learn table arbitration ////
 
         //// memory read control arbitration ////
-        .mem_re_i(),
-        .mem_raddr_i(),
+        .mem_re_i(mem_re_i),
+        .mem_raddr_i(mem_raddr_i),
 
         .mem_re_o         (arbiter_mem_re),
         .mem_raddr_o      (arbiter_mem_raddr),
 
-        .mem_rvalid_i(),
-        .mem_rdata_i(),
+        .mem_rvalid_i(mem_rvalid_i),
+        .mem_rdata_i(mem_rdata_i),
 
         .mem_rvalid_o     (arbiter_mem_rvalid),
         .mem_rdata_o      (arbiter_mem_rdata),
 
-        .free_req_i(),
-        .free_block_idx_i(),
+        .free_req_i(free_req_i),
+        .free_block_idx_i(free_block_idx_i),
 
         .free_req_o       (arbiter_free_req),
         .free_block_idx_o (arbiter_free_block_idx)
@@ -209,8 +242,8 @@ module top #(
 
     // 1 x fl
     fl fl_u (
-        .clk(),
-        .rst_n(),
+        .clk(switch_clk),
+        .rst_n(switch_rst_n),
 
         // alloc
         .alloc_req_i(arbiter_fl_alloc_req),
@@ -224,7 +257,7 @@ module top #(
 
     // 1 x sram
     sram sram_u (
-        .clk(),
+        .clk(switch_clk),
         .we(arbiter_mem_we),
         .re(arbiter_mem_re),
         .r_addr(arbiter_mem_raddr),
@@ -234,5 +267,3 @@ module top #(
     );
 
 endmodule
-
-`default_nettype wire

@@ -7,12 +7,12 @@ module arbiter #(
     input logic rst_n,
 
     //// Memory write port arbitration ////
-    input logic [N-1:0] mem_we_i,
+    input logic mem_we_i [N-1:0],
     input logic [ADDR_W-1:0] mem_waddr_i [N-1:0],
     input logic [BLOCK_BITS-1:0] mem_wdata_i [N-1:0],
 
     // output to memory write controller
-    output logic [N-1:0] mem_gnt_o, 
+    output logic mem_gnt_o [N-1:0], 
 
     // output to memory
     output logic mem_we_o,
@@ -22,10 +22,10 @@ module arbiter #(
 
     //// Free list allocation arbitration ////
     // from memory write controller
-    input logic [N-1:0] fl_alloc_req_i,
+    input logic fl_alloc_req_i [N-1:0],
     
     // to memory write controller
-    output logic [N-1:0] fl_alloc_gnt_o,
+    output logic fl_alloc_gnt_o [N-1:0],
     output logic [ADDR_W-1:0] fl_alloc_block_idx_o [N-1:0],
 
     // to fl
@@ -41,7 +41,7 @@ module arbiter #(
     input logic [47:0] rx_mac_src_addr_i [N-1:0],
     input logic [47:0] rx_mac_dst_addr_i [N-1:0],
     input logic [ADDR_W-1:0] data_start_addr_i [N-1:0],
-    input logic [N-1:0] eop_i,
+    input logic eop_i [N-1:0],
 
     // to address learn table
     output logic [$clog2(N)-1:0] port_o,
@@ -53,7 +53,7 @@ module arbiter #(
 
     //// memory read control arbitration ////
     // from memory read ctrl
-    input logic [N-1:0] mem_re_i,
+    input logic mem_re_i [N-1:0],
     input logic [ADDR_W-1:0] mem_raddr_i [N-1:0],
     
     // to memory
@@ -65,11 +65,11 @@ module arbiter #(
     input logic [BLOCK_BITS-1:0] mem_rdata_i, // 
 
     // to memory read ctrl
-    output logic [N-1:0] mem_rvalid_o,
+    output logic mem_rvalid_o [N-1:0],
     output logic [BLOCK_BITS-1:0] mem_rdata_o [N-1:0],
 
     // freeing logic sent read controller
-    input logic [N-1:0] free_req_i,
+    input logic free_req_i [N-1:0],
     input logic [ADDR_W-1:0] free_block_idx_i [N-1:0],
 
     // free signal to fl
@@ -85,7 +85,7 @@ module arbiter #(
     assign mem_wdata_o = mem_wdata_i[cur];
     
     always_comb begin
-        mem_gnt_o = 0;
+        mem_gnt_o = '{default:0};
         mem_gnt_o[cur+1] = 1;
     end
 
@@ -106,7 +106,7 @@ module arbiter #(
     assign fl_alloc_req_o = fl_alloc_gnt_i ? fl_alloc_req_i[cur_fl_alloc_port+1] : fl_alloc_req_i[cur_fl_alloc_port]; 
 
     always_comb begin
-        fl_alloc_gnt_o = 0; 
+        fl_alloc_gnt_o = '{default:0}; 
         fl_alloc_gnt_o[cur_fl_alloc_port] = fl_alloc_gnt_i;
     end
 
