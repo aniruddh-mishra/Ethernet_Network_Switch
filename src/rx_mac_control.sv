@@ -117,7 +117,7 @@ always_comb begin
     next_preamble_header_ctr = preamble_header_ctr;
     next_mac_dst_addr_o = mac_dst_addr_o; next_mac_src_addr_o = mac_src_addr_o;
     next_frame_data_o = frame_data_o;
-    next_frame_eof_o = 1'b0; // sticky eof until next sof
+    next_frame_eof_o = frame_eof_o; // sticky eof until next sof
     next_frame_sof_o = 1'b0; // default false
     next_frame_error_o = rx_er || frame_error_o; // sticky error during frame until next sof
     
@@ -166,6 +166,8 @@ always_comb begin
 
                 if (preamble_header_ctr == 8) begin
                     next_frame_sof_o = 1'b1;
+                    next_frame_error_o = 1'b0; // reset error
+                    next_frame_eof_o = 1'b0; // reset eof
                     next_mac_dst_addr_o = {mac_dst_addr_o[4:0], fifo_dout}; // SIPO
                 end else if (preamble_header_ctr < 14) begin // 8 + 6 = 14
                     next_mac_dst_addr_o = {mac_dst_addr_o[4:0], fifo_dout}; 
@@ -181,8 +183,6 @@ always_comb begin
                 next_frame_data_o = fifo_dout;
                 // if (frame_grant_i) $display("Sending data %h in HEADER state", fifo_dout);
                 next_frame_valid_o = 1'b1;
-                next_frame_error_o = 1'b0; // reset error
-                next_frame_eof_o = 1'b0; // reset eof
             end
         end
         PAYLOAD: begin // assume frame fits within max and min bytes + follows IFG
@@ -192,7 +192,7 @@ always_comb begin
                 // $display("[%0t] DUT in-progress CRC: %h", $time, next_crc_reg);
                 next_frame_data_o = fifo_dout;
                 next_frame_valid_o = 1'b1;
-            end else if (!rx_dv && prev_prev_fifo_rd_en) begin // sender has finished sending frame + we have read all data --> don't end early before last data
+            end else if (!rx_dv && fifo_empty) begin // sender has finished sending frame + we have read all data --> don't end early before last data
                 $display("[%0t] Final DUT test, calc CRC %h vs exp CRC %h", $time, crc_buffer[3], {data_buffer, frame_data_o});
                 if ((crc_buffer[3]) != {data_buffer, frame_data_o}) begin
                     next_frame_error_o = 1'b1; // allow payload to cut through, perform CRC calculations as data arrives, flag error at end
