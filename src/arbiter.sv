@@ -115,7 +115,7 @@ module arbiter #(
             cur_fl_alloc_port <= 0;
         end
         else begin
-            if (fl_alloc_req_i[cur_fl_alloc_port] && fl_alloc_gnt_i)
+            if ((fl_alloc_req_i[cur_fl_alloc_port] && fl_alloc_gnt_i) | !fl_alloc_req_i[cur_fl_alloc_port])
                 cur_fl_alloc_port <= cur_fl_alloc_port + 1;
         end
     end

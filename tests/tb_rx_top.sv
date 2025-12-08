@@ -11,9 +11,9 @@ module tb_rx_top;
 
     // DUT signals
     logic gmii_rx_clk;
-    logic [DATA_WIDTH-1:0] gmii_rx_data [NUM_PORTS];
-    logic gmii_rx_dv [NUM_PORTS];
-    logic gmii_rx_er [NUM_PORTS];
+    logic [DATA_WIDTH-1:0] gmii_rx_data [NUM_PORTS-1:0];
+    logic gmii_rx_dv [NUM_PORTS-1:0];
+    logic gmii_rx_er [NUM_PORTS-1:0];
 
     logic switch_clk, switch_rst_n;
 
@@ -160,7 +160,7 @@ module tb_rx_top;
             48'hFF_FF_FF_FF_FF_FF,
             48'h00_11_22_33_44_55,
             16'h0800,
-            64,
+            48,
             p0
         );
 
@@ -173,7 +173,7 @@ module tb_rx_top;
             48'h12_34_56_78_9A_BC,
             48'hDE_AD_BE_EF_CA_FE,
             16'h86DD,
-            64,
+            48,
             p1
         );
 

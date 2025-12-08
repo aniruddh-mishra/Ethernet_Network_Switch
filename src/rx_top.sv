@@ -3,9 +3,9 @@ module rx_top #(
 ) (
     // GMII interface
     input logic gmii_rx_clk_i,
-    input logic [DATA_WIDTH-1:0] gmii_rx_data_i [NUM_PORTS],
-    input logic gmii_rx_dv_i [NUM_PORTS],
-    input logic gmii_rx_er_i [NUM_PORTS],
+    input logic [DATA_WIDTH-1:0] gmii_rx_data_i [NUM_PORTS-1:0],
+    input logic gmii_rx_dv_i [NUM_PORTS-1:0],
+    input logic gmii_rx_er_i [NUM_PORTS-1:0],
 
     // switch's clk domain
     input logic switch_clk,
@@ -21,41 +21,41 @@ module rx_top #(
     // Note: naming drops trailing "_o" per your example.
     // =========================================================
     /* verilator lint_off UNUSEDSIGNAL */
-    logic [5:0][7:0]        rx_mac_control_mac_dst_addr   [NUM_PORTS];
-    logic [5:0][7:0]        rx_mac_control_mac_src_addr   [NUM_PORTS];
+    logic [5:0][7:0]        rx_mac_control_mac_dst_addr   [NUM_PORTS-1:0];
+    logic [5:0][7:0]        rx_mac_control_mac_src_addr   [NUM_PORTS-1:0];
 
-    logic [DATA_WIDTH-1:0] rx_mac_control_frame_data     [NUM_PORTS];
-    logic                  rx_mac_control_frame_valid    [NUM_PORTS];
-    logic                  rx_mac_control_frame_sof      [NUM_PORTS];
-    logic                  rx_mac_control_frame_eof      [NUM_PORTS];
-    logic                  rx_mac_control_frame_error    [NUM_PORTS];
+    logic [DATA_WIDTH-1:0] rx_mac_control_frame_data     [NUM_PORTS-1:0];
+    logic                  rx_mac_control_frame_valid    [NUM_PORTS-1:0];
+    logic                  rx_mac_control_frame_sof      [NUM_PORTS-1:0];
+    logic                  rx_mac_control_frame_eof      [NUM_PORTS-1:0];
+    logic                  rx_mac_control_frame_error    [NUM_PORTS-1:0];
 
     // =========================================================
     // memory_write_ctrl _o signals (per-port)
     // Prefix: memory_write_ctrl_
     // =========================================================
-    logic                  memory_write_ctrl_data_ready  [NUM_PORTS];
+    logic                  memory_write_ctrl_data_ready  [NUM_PORTS-1:0];
 
-    logic                  memory_write_ctrl_fl_alloc_req[NUM_PORTS];
+    logic                  memory_write_ctrl_fl_alloc_req[NUM_PORTS-1:0];
 
-    logic                  memory_write_ctrl_mem_we      [NUM_PORTS];
-    logic [ADDR_W-1:0]     memory_write_ctrl_mem_addr    [NUM_PORTS];
-    logic [BLOCK_BITS-1:0] memory_write_ctrl_mem_wdata   [NUM_PORTS];
+    logic                  memory_write_ctrl_mem_we      [NUM_PORTS-1:0];
+    logic [ADDR_W-1:0]     memory_write_ctrl_mem_addr    [NUM_PORTS-1:0];
+    logic [BLOCK_BITS-1:0] memory_write_ctrl_mem_wdata   [NUM_PORTS-1:0];
 
-    logic [ADDR_W-1:0]     memory_write_ctrl_start_addr  [NUM_PORTS];
+    logic [ADDR_W-1:0]     memory_write_ctrl_start_addr  [NUM_PORTS-1:0];
 
     // =========================================================
     // arbiter _o signals (single instance, N=NUM_PORTS)
     // Prefix: arbiter_
     // =========================================================
-    logic                  arbiter_mem_gnt [NUM_PORTS];
+    logic                  arbiter_mem_gnt [NUM_PORTS-1:0];
 
     logic                  arbiter_mem_we;
     logic [ADDR_W-1:0]     arbiter_mem_waddr;
     logic [BLOCK_BITS-1:0] arbiter_mem_wdata;
 
-    logic                  arbiter_fl_alloc_gnt [NUM_PORTS];
-    logic [ADDR_W-1:0]     arbiter_fl_alloc_block_idx [NUM_PORTS];
+    logic                  arbiter_fl_alloc_gnt [NUM_PORTS-1:0];
+    logic [ADDR_W-1:0]     arbiter_fl_alloc_block_idx [NUM_PORTS-1:0];
 
     logic                  arbiter_fl_alloc_req;
 
@@ -68,8 +68,8 @@ module rx_top #(
     logic                  arbiter_mem_re;
     logic [ADDR_W-1:0]     arbiter_mem_raddr;
 
-    logic                  arbiter_mem_rvalid [NUM_PORTS];
-    logic [BLOCK_BITS-1:0] arbiter_mem_rdata [NUM_PORTS];
+    logic                  arbiter_mem_rvalid [NUM_PORTS-1:0];
+    logic [BLOCK_BITS-1:0] arbiter_mem_rdata [NUM_PORTS-1:0];
 
     logic                  arbiter_free_req;
     logic [ADDR_W-1:0]     arbiter_free_block_idx;
@@ -92,24 +92,24 @@ module rx_top #(
     // =========================================================
     //// Address learn table arbitration ////
     // From rx mac control
-    logic [47:0] rx_mac_src_addr_i [NUM_PORTS]; assign rx_mac_src_addr_i = '{default:0};
-    logic [47:0] rx_mac_dst_addr_i [NUM_PORTS]; assign rx_mac_dst_addr_i = '{default:0};
-    logic [ADDR_W-1:0] data_start_addr_i [NUM_PORTS]; assign data_start_addr_i = '{default:0};
-    logic eop_i  [NUM_PORTS]; assign eop_i = '{default:0};
+    logic [47:0] rx_mac_src_addr_i [NUM_PORTS-1:0]; assign rx_mac_src_addr_i = '{default:0};
+    logic [47:0] rx_mac_dst_addr_i [NUM_PORTS-1:0]; assign rx_mac_dst_addr_i = '{default:0};
+    logic [ADDR_W-1:0] data_start_addr_i [NUM_PORTS-1:0]; assign data_start_addr_i = '{default:0};
+    logic eop_i  [NUM_PORTS-1:0]; assign eop_i = '{default:0};
     //// Address learn table arbitration ////
 
     //// memory read control arbitration ////
     // from memory read ctrl
-    logic mem_re_i [NUM_PORTS]; assign mem_re_i = '{default:0};
-    logic [ADDR_W-1:0] mem_raddr_i [NUM_PORTS]; assign mem_raddr_i = '{default:0};
+    logic mem_re_i [NUM_PORTS-1:0]; assign mem_re_i = '{default:0};
+    logic [ADDR_W-1:0] mem_raddr_i [NUM_PORTS-1:0]; assign mem_raddr_i = '{default:0};
 
     // from memory
     logic mem_rvalid_i; assign mem_rvalid_i = 0;
     logic [BLOCK_BITS-1:0] mem_rdata_i; assign mem_rdata_i = 0;
 
     // freeing logic sent read controller
-    logic free_req_i [NUM_PORTS]; assign free_req_i = '{default:0};
-    logic [ADDR_W-1:0] free_block_idx_i [NUM_PORTS]; assign free_block_idx_i = '{default:0};
+    logic free_req_i [NUM_PORTS-1:0]; assign free_req_i = '{default:0};
+    logic [ADDR_W-1:0] free_block_idx_i [NUM_PORTS-1:0]; assign free_block_idx_i = '{default:0};
 
     // =========================================================
     // Instances
