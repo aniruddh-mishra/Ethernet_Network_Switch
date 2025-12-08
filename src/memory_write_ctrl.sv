@@ -60,6 +60,8 @@ module memory_write_ctrl (
         end
     end
 
+    logic payload_data_end;
+
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= IDLE;
@@ -71,6 +73,7 @@ module memory_write_ctrl (
             next_frame_allocated <= 0;
             start_addr <= 0;
             frame_cnt <= 0;
+            payload_data_end <= 0;
         end
         else begin
             state <= state_n;
@@ -97,6 +100,7 @@ module memory_write_ctrl (
                     next_frame_allocated <= 0;
                     beat_cnt <= 0;
                     frame_cnt <= 0;
+                    payload_data_end <= 0;
 
                     if (data_valid_i && data_begin_i) begin
                         beat_cnt <= 1;
@@ -104,7 +108,8 @@ module memory_write_ctrl (
                     end
                 end
 
-                WRITE_PAYLOAD: begin                        
+                WRITE_PAYLOAD: begin         
+                    payload_data_end <= data_end_i;             
                     if (data_valid_i) begin
                         payload_reg <= {payload_reg[PAYLOAD_BITS-8-1:0], data_i};
                         beat_cnt <= beat_cnt + 1;
@@ -120,8 +125,9 @@ module memory_write_ctrl (
                         footer.next_idx <= next_idx;
                         footer.eop <= data_end_i;
                         footer.rsvd <= 0;
+                        payload_data_end <= 0;
 
-                        if (!data_end_i) begin
+                        if (!data_end_i && !payload_data_end) begin
                             beat_cnt <= 0;
                             frame_allocated <= 1; // next_idx already allocated;
                             next_frame_allocated <= 0;
@@ -154,7 +160,7 @@ module memory_write_ctrl (
             end
 
             WRITE_PAYLOAD: begin
-                if (data_valid_i && ({26'b0, beat_cnt} == PAYLOAD_BYTES - 1))
+                if (data_valid_i && (({26'b0, beat_cnt} == PAYLOAD_BYTES - 1) || data_end_i))
                     state_n = (frame_allocated && next_frame_allocated) ? WRITE_FOOTER : WAIT;
             end
 
@@ -165,7 +171,7 @@ module memory_write_ctrl (
 
             WRITE_FOOTER: begin
                 if (mem_ready_i) // mem transaction success
-                    state_n = data_end_i ? IDLE : WRITE_PAYLOAD;
+                    state_n = (data_end_i || payload_data_end) ? IDLE : WRITE_PAYLOAD;
                 // TODO: FIX SINGLE FRAME LEAK IF WE GO TO IDLE STATE (LOW PRIORITY)
             end
         endcase
