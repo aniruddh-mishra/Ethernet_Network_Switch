@@ -65,7 +65,7 @@ logic prev_fifo_rd_en; // needed b/c 1st cycle: req read, 2nd cycle: check data
 logic [5:0][7:0] next_mac_dst_addr_o, next_mac_src_addr_o;
 logic [DATA_WIDTH-1:0] next_frame_data_o;
 logic next_frame_valid_o;
-logic next_frame_sof_o; // logic next_frame_eof_o; logic next_frame_error_o;
+logic next_frame_sof_o; logic next_frame_eof_o; logic next_frame_error_o;
 
 // output status and debug signals
 logic [31:0] next_crc_error_count; 
@@ -117,10 +117,9 @@ always_comb begin
     next_preamble_header_ctr = preamble_header_ctr;
     next_mac_dst_addr_o = mac_dst_addr_o; next_mac_src_addr_o = mac_src_addr_o;
     next_frame_data_o = frame_data_o;
-    // next_frame_eof_o = 1'b0;
+    next_frame_eof_o = 1'b0; // sticky eof until next sof
     next_frame_sof_o = 1'b0; // default false
-    frame_eof_o = 1'b0; frame_error_o = (rx_er) ? 1'b1 : 1'b0;
-    // next_frame_error_o = rx_er || frame_error_o; // sticky error during frame
+    next_frame_error_o = rx_er || frame_error_o; // sticky error during frame until next sof
     
     // debug
     next_crc_error_count = crc_error_count;
@@ -131,7 +130,7 @@ always_comb begin
     case (current_state)
         IDLE: begin // assume IFG is not violated from sender
             next_crc_reg = 32'hFFFFFFFF;
-            // next_frame_error_o = 1'b0; // resets frame error which stays high during frame
+
             if (!fifo_empty) fifo_rd_en = 1'b1; 
             if (prev_fifo_rd_en) begin
                 if (fifo_dout == PREAMBLE_BYTE) begin
@@ -182,6 +181,8 @@ always_comb begin
                 next_frame_data_o = fifo_dout;
                 // if (frame_grant_i) $display("Sending data %h in HEADER state", fifo_dout);
                 next_frame_valid_o = 1'b1;
+                next_frame_error_o = 1'b0; // reset error
+                next_frame_eof_o = 1'b0; // reset eof
             end
         end
         PAYLOAD: begin // assume frame fits within max and min bytes + follows IFG
@@ -194,19 +195,14 @@ always_comb begin
             end else if (!rx_dv && prev_prev_fifo_rd_en) begin // sender has finished sending frame + we have read all data --> don't end early before last data
                 $display("[%0t] Final DUT test, calc CRC %h vs exp CRC %h", $time, crc_buffer[3], {data_buffer, frame_data_o});
                 if ((crc_buffer[3]) != {data_buffer, frame_data_o}) begin
-                    frame_error_o = 1'b1; // allow payload to cut through, perform CRC calculations as data arrives, flag error at end
+                    next_frame_error_o = 1'b1; // allow payload to cut through, perform CRC calculations as data arrives, flag error at end
                     // update debug ctrs
                     next_crc_error_count = crc_error_count + 1;
                     next_rx_error_count = rx_error_count + 1;
                 end
-                frame_eof_o = 1'b1;
+                next_frame_eof_o = 1'b1;
                 next_state = IDLE;
                 next_rx_frame_count = rx_frame_count + 1; // update debug ctrs
-            end
-
-            if (!frame_grant_i && !rx_dv) begin // if frame ended while mem backlogged, reset to IDLE, set error and eof for one cycle
-                frame_error_o = 1'b1; // takes priority over prev crc error
-                frame_eof_o = 1'b1;
             end
         end
         default: next_state = IDLE;
@@ -219,10 +215,10 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         current_state <= IDLE;
         prev_fifo_rd_en <= 0;
         frame_data_o <= 0;
-        // frame_eof_o <= 0;
+        frame_eof_o <= 0;
         frame_sof_o <= 0;
         frame_valid_o <= 0;
-        // frame_error_o <= 0;
+        frame_error_o <= 0;
         preamble_header_ctr <= 0;
         mac_dst_addr_o <= 0;
         mac_src_addr_o <= 0;
@@ -237,10 +233,10 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
             current_state <= next_state;
             prev_fifo_rd_en <= fifo_rd_en;
             frame_data_o <= next_frame_data_o;
-            // frame_eof_o <= next_frame_eof_o;
+            frame_eof_o <= next_frame_eof_o;
             frame_sof_o <= next_frame_sof_o;
             frame_valid_o <= next_frame_valid_o;
-            // frame_error_o <= next_frame_error_o;
+            frame_error_o <= next_frame_error_o;
             preamble_header_ctr <= next_preamble_header_ctr;
             mac_dst_addr_o <= next_mac_dst_addr_o;
             mac_src_addr_o <= next_mac_src_addr_o;
@@ -254,8 +250,8 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
             if (!frame_grant_i && fifo_rd_en) prev_fifo_rd_en <= 1'b1; // the only case this will be true is if fifo_rd_en asserts on the same cycle grant is deasserted, so keep it high to not lose this byte
             if (!rx_dv) begin
                 current_state <= IDLE; // if frame ended while mem backlogged, reset to IDLE, set error and eof for one cycle
-                // frame_error_o <= ((current_state == IDLE) || (current_state == PREAMBLE)) ? 1'b0 : 1'b1; // mark error + eof so mem knows frame ended
-                // frame_eof_o <= ((current_state == IDLE) || (current_state == PREAMBLE)) ? 1'b0 : 1'b1;
+                frame_error_o <= ((current_state == IDLE) || (current_state == PREAMBLE)) ? 1'b0 : 1'b1; // mark error + eof so mem knows frame ended
+                frame_eof_o <= ((current_state == IDLE) || (current_state == PREAMBLE)) ? 1'b0 : 1'b1;
                 rx_frame_count <= rx_frame_count + 1; 
             end
         end 
