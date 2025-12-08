@@ -30,7 +30,7 @@ module tb_rx_top;
 
     initial begin
         $dumpfile("tb_rx_top.vcd");
-        $dumpvars(0, tb_memory_read_ctrl);
+        $dumpvars(0, tb_rx_top);
     end
 
     // DUT instantiation (exact style you requested)
@@ -70,9 +70,6 @@ module tb_rx_top;
         gmii_rx_er  [port] = 1'b0;
     endtask
 
-    // Send a very simple Ethernet frame:
-    // preamble + SFD + header + payload + dummy FCS
-   
     // Initialize arrays
     task automatic init_gmii;
         for (int p = 0; p < NUM_PORTS; p++) begin
@@ -152,35 +149,37 @@ module tb_rx_top;
         switch_rst_n = 1'b1;
         repeat(10) @(posedge switch_clk);
 
-        $display("\n=== Simple RX smoke test ===");
+        $display("\n=== Simple RX parallel smoke test ===");
 
-        // Frame 1: minimum payload-ish (46 bytes) on port 0
-        $display("[%0t] Sending frame 1 on port 0 (payload 46)", $time);
-        send_simple_frame(
-            48'hFF_FF_FF_FF_FF_FF,
-            48'h00_11_22_33_44_55,
-            16'h0800,
-            48,
-            p0
-        );
+        // Send both frames concurrently on different ports
+        fork
+            begin : SEND_FRAME_P0
+                $display("[%0t] Sending frame 1 on port 0 (payload 48)", $time);
+                send_simple_frame(
+                    48'hFF_FF_FF_FF_FF_FF,
+                    48'h00_11_22_33_44_55,
+                    16'h0800,
+                    48,
+                    p0
+                );
+            end
 
-        // Give the switch domain time
-        repeat(50) @(posedge switch_clk);
+            begin : SEND_FRAME_P1
+                $display("[%0t] Sending frame 2 on port 1 (payload 48)", $time);
+                send_simple_frame(
+                    48'h12_34_56_78_9A_BC,
+                    48'hDE_AD_BE_EF_CA_FE,
+                    16'h86DD,
+                    48,
+                    p1
+                );
+            end
+        join
 
-        // Frame 2: slightly larger payload (60 bytes) on port 1
-        $display("[%0t] Sending frame 2 on port 1 (payload 60)", $time);
-        send_simple_frame(
-            48'h12_34_56_78_9A_BC,
-            48'hDE_AD_BE_EF_CA_FE,
-            16'h86DD,
-            48,
-            p1
-        );
-
+        // Give the switch domain time after both complete
         repeat(100) @(posedge switch_clk);
 
         // Optional visibility if these internal signals exist in your rx_top
-        // (You used them previously)
         $display("[%0t] Port0 frame_error = %0b", $time, dut.rx_mac_control_frame_error[p0]);
         $display("[%0t] Port1 frame_error = %0b", $time, dut.rx_mac_control_frame_error[p1]);
 
