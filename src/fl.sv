@@ -26,8 +26,8 @@ module fl (
         if (!rst_n) begin
             sp <= NUM_BLOCKS[ADDR_W:0];
             // 0th entry unused
-            for (int i = 0; i <= NUM_BLOCKS; i++) begin
-                stack[i] <= i[ADDR_W-1:0];
+            for (int i = 0; i < NUM_BLOCKS; i++) begin
+                stack[i+1] <= i[ADDR_W-1:0];
             end
         end
         else begin

@@ -121,28 +121,30 @@ module memory_write_ctrl (
                 end
 
                 WRITE_FOOTER: begin
-                    if (mem_ready_i) begin
-                        footer.next_idx <= next_idx;
-                        footer.eop <= data_end_i;
-                        footer.rsvd <= 0;
-                        payload_data_end <= 0;
+                    if (data_valid_i || data_end_i || payload_data_end) begin
+                        if (mem_ready_i) begin
+                            footer.next_idx <= next_idx;
+                            footer.eop <= data_end_i;
+                            footer.rsvd <= 0;
+                            payload_data_end <= 0;
 
-                        if (!data_end_i && !payload_data_end) begin
-                            beat_cnt <= 0;
-                            frame_allocated <= 1; // next_idx already allocated;
-                            next_frame_allocated <= 0;
-                            curr_idx <= next_idx;
+                            if (!data_end_i && !payload_data_end) begin
+                                beat_cnt <= 0;
+                                frame_allocated <= 1; // next_idx already allocated;
+                                next_frame_allocated <= 0;
+                                curr_idx <= next_idx;
 
-                            if (data_valid_i) begin
-                                beat_cnt <= 1;
-                                payload_reg <= {496'b0, data_i};
+                                if (data_valid_i) begin
+                                    beat_cnt <= 1;
+                                    payload_reg <= {496'b0, data_i};
+                                end
                             end
-                        end
 
-                        mem_addr_o <= curr_idx;
-                        mem_wdata_o <= { payload_reg , footer };
-                        mem_we_o <= 1'b1;
-                        frame_cnt <= frame_cnt + 1;
+                            mem_addr_o <= curr_idx;
+                            mem_wdata_o <= { payload_reg , footer };
+                            mem_we_o <= 1'b1;
+                            frame_cnt <= frame_cnt + 1;
+                        end
                     end
                 end
             endcase
@@ -160,7 +162,7 @@ module memory_write_ctrl (
             end
 
             WRITE_PAYLOAD: begin
-                if (data_valid_i && (({26'b0, beat_cnt} == PAYLOAD_BYTES - 1) || data_end_i))
+                if ((data_valid_i && (({26'b0, beat_cnt} == PAYLOAD_BYTES - 1))) || data_end_i)
                     state_n = (frame_allocated && next_frame_allocated) ? WRITE_FOOTER : WAIT;
             end
 
@@ -170,7 +172,7 @@ module memory_write_ctrl (
             end
 
             WRITE_FOOTER: begin
-                if (mem_ready_i) // mem transaction success
+                if ((data_valid_i || data_end_i || payload_data_end) && mem_ready_i) // mem transaction success
                     state_n = (data_end_i || payload_data_end) ? IDLE : WRITE_PAYLOAD;
                 // TODO: FIX SINGLE FRAME LEAK IF WE GO TO IDLE STATE (LOW PRIORITY)
             end
