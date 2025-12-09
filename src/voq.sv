@@ -59,8 +59,12 @@ always_ff @(posedge clk or negedge rst_n) begin
                 if (read_req_i) begin
                     ptr_o <= voq_table[voq_r_ptr];
                     ptr_valid_o <= 1'b1;
-                    state <= STATE_NORMAL;
                     voq_r_ptr <= voq_r_ptr + 1;
+                    if (write_req_i) begin
+                        voq_table[voq_w_ptr] <= ptr_i;
+                        voq_w_ptr <= voq_w_ptr + 1;
+                    end 
+                    else state <= STATE_NORMAL;
                 end
                 else ptr_valid_o <= 1'b0;
             end

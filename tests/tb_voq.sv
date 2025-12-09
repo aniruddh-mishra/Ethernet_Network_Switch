@@ -108,6 +108,7 @@ module tb_voq;
     end
     // This push should move to FULL
     push(12'h2FF);
+    push_pop_same_cycle(12'h300, 12'h200);
 
     // While FULL, an extra write (without read) should be ignored (or safely handled)
     @(posedge clk);
@@ -118,11 +119,11 @@ module tb_voq;
     ptr_i       = '0;
 
     // Drain all and check order (the extra write should not appear)
-    pop_expect(12'h200);
     for (int i = 1; i < DEPTH-1; i++) begin
       pop_expect(12'h200 + i[11:0]);
     end
     pop_expect(12'h2FF);
+    pop_expect(12'h300);
 
     // Back to EMPTY
     pop_expect(12'h00, /*must_be_valid=*/0);
