@@ -87,17 +87,6 @@ module rx_top #(
     // =========================================================
     logic [BLOCK_BITS-1:0] sram_rdata;
 
-    // =========================================================
-    // also include signals to drive all irrelvant signals to 0
-    // =========================================================
-    //// Address learn table arbitration ////
-    // From rx mac control
-    logic [47:0] rx_mac_src_addr_i [NUM_PORTS-1:0]; assign rx_mac_src_addr_i = '{default:0};
-    logic [47:0] rx_mac_dst_addr_i [NUM_PORTS-1:0]; assign rx_mac_dst_addr_i = '{default:0};
-    logic [ADDR_W-1:0] data_start_addr_i [NUM_PORTS-1:0]; assign data_start_addr_i = '{default:0};
-    logic eop_i  [NUM_PORTS-1:0]; assign eop_i = '{default:0};
-    //// Address learn table arbitration ////
-
     //// memory read control arbitration ////
     // from memory read ctrl
     logic mem_re_i [NUM_PORTS-1:0]; assign mem_re_i = '{default:0};
@@ -110,6 +99,10 @@ module rx_top #(
     // freeing logic sent read controller
     logic free_req_i [NUM_PORTS-1:0]; assign free_req_i = '{default:0};
     logic [ADDR_W-1:0] free_block_idx_i [NUM_PORTS-1:0]; assign free_block_idx_i = '{default:0};
+
+    // Crossbar outputs
+    logic [NUM_PORTS-1:0] crossbar_voq_write_reqs;
+    logic [ADDR_W-1:0] crossbar_voq_start_ptrs [NUM_PORTS-1:0];
 
     // =========================================================
     // Instances
@@ -208,10 +201,11 @@ module rx_top #(
         //// Free list allocation arbitration ////
 
         //// Address learn table arbitration ////
-        .rx_mac_src_addr_i(rx_mac_src_addr_i),
-        .rx_mac_dst_addr_i(rx_mac_dst_addr_i),
-        .data_start_addr_i(data_start_addr_i),
-        .eop_i(eop_i),
+        .rx_mac_src_addr_i(rx_mac_control_mac_src_addr),
+        .rx_mac_dst_addr_i(rx_mac_control_mac_dst_addr),
+        .data_start_addr_i(memory_write_ctrl_start_addr),
+        .data_error_i(rx_mac_control_frame_error),
+        .eop_i(rx_mac_control_frame_eof),
 
         .port_o           (arbiter_port),
         .rx_mac_src_addr_o(arbiter_rx_mac_src_addr),
@@ -264,6 +258,20 @@ module rx_top #(
         .w_addr(arbiter_mem_waddr),
         .wdata(arbiter_mem_wdata),
         .rdata   (sram_rdata)
+    );
+
+    crossbar #(
+        .NUM_PORTS(NUM_PORTS),
+        .ADDR_W(ADDR_W)) crossbar_u (
+        .clk(switch_clk),
+        .rst_n(switch_rst_n),
+        .eof_i(arbiter_eop),
+        .ingress_port_i(arbiter_port),
+        .rx_mac_src_addr_i(arbiter_rx_mac_src_addr),
+        .rx_mac_dst_addr_i(arbiter_rx_mac_dst_addr),
+        .data_start_ptr_i(arbiter_data_start_addr),
+        .voq_write_reqs_o(crossbar_voq_write_reqs),
+        .voq_start_ptrs_o(crossbar_voq_start_ptrs)
     );
 
 endmodule

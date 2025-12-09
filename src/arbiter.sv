@@ -41,6 +41,7 @@ module arbiter #(
     input logic [47:0] rx_mac_src_addr_i [N-1:0],
     input logic [47:0] rx_mac_dst_addr_i [N-1:0],
     input logic [ADDR_W-1:0] data_start_addr_i [N-1:0],
+    input logic data_error_i [N-1:0],
     input logic eop_i [N-1:0],
 
     // to address learn table
@@ -127,6 +128,7 @@ module arbiter #(
     assign rx_mac_dst_addr_o = rx_mac_dst_addr_i[cur];
     assign data_start_addr_o = data_start_addr_i[cur];
     assign eop_o = eop_i[cur];
+    // & ~data_error_i[cur];
 
     //// memory read control arbitration ////
     logic [$clog2(N)-1:0] cur_mem_read_port;

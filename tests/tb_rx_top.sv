@@ -40,6 +40,10 @@ module tb_rx_top;
     int unsigned round_idx;
     logic [NUM_PORTS-1:0] port_done;
 
+    logic [47:0] learn_dst;
+    logic [47:0] learn_src;
+    logic [15:0] learn_type;
+
     // Clock generation
     initial begin
         gmii_rx_clk = 0;
@@ -196,61 +200,61 @@ module tb_rx_top;
     // Per-port worker processes
     // ----------------------------
 
-    initial begin : PORT0_PROC
-        port_t ap;
-        ap = port_t'(0);
+    // initial begin : PORT0_PROC
+    //     port_t ap;
+    //     ap = port_t'(0);
 
-        wait (start_go);
+    //     wait (start_go);
 
-        for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
-            wait (round_go && (round_idx == k));
-            send_kth_frame_on_port(ap, k, base_dst_arr[0], base_src_arr[0], base_type_arr[0], payload_len_tbl[0][k]);
-            port_done[0] = 1'b1;
-            wait (!round_go);
-        end
-    end
+    //     for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
+    //         wait (round_go && (round_idx == k));
+    //         send_kth_frame_on_port(ap, k, base_dst_arr[0], base_src_arr[0], base_type_arr[0], payload_len_tbl[0][k]);
+    //         port_done[0] = 1'b1;
+    //         wait (!round_go);
+    //     end
+    // end
 
-    initial begin : PORT1_PROC
-        port_t ap;
-        ap = port_t'(1);
+    // initial begin : PORT1_PROC
+    //     port_t ap;
+    //     ap = port_t'(1);
 
-        wait (start_go);
+    //     wait (start_go);
 
-        for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
-            wait (round_go && (round_idx == k));
-            send_kth_frame_on_port(ap, k, base_dst_arr[1], base_src_arr[1], base_type_arr[1], payload_len_tbl[1][k]);
-            port_done[1] = 1'b1;
-            wait (!round_go);
-        end
-    end
+    //     for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
+    //         wait (round_go && (round_idx == k));
+    //         send_kth_frame_on_port(ap, k, base_dst_arr[1], base_src_arr[1], base_type_arr[1], payload_len_tbl[1][k]);
+    //         port_done[1] = 1'b1;
+    //         wait (!round_go);
+    //     end
+    // end
 
-    initial begin : PORT2_PROC
-        port_t ap;
-        ap = port_t'(2);
+    // initial begin : PORT2_PROC
+    //     port_t ap;
+    //     ap = port_t'(2);
 
-        wait (start_go);
+    //     wait (start_go);
 
-        for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
-            wait (round_go && (round_idx == k));
-            send_kth_frame_on_port(ap, k, base_dst_arr[2], base_src_arr[2], base_type_arr[2], payload_len_tbl[2][k]);
-            port_done[2] = 1'b1;
-            wait (!round_go);
-        end
-    end
+    //     for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
+    //         wait (round_go && (round_idx == k));
+    //         send_kth_frame_on_port(ap, k, base_dst_arr[2], base_src_arr[2], base_type_arr[2], payload_len_tbl[2][k]);
+    //         port_done[2] = 1'b1;
+    //         wait (!round_go);
+    //     end
+    // end
 
-    initial begin : PORT3_PROC
-        port_t ap;
-        ap = port_t'(3);
+    // initial begin : PORT3_PROC
+    //     port_t ap;
+    //     ap = port_t'(3);
 
-        wait (start_go);
+    //     wait (start_go);
 
-        for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
-            wait (round_go && (round_idx == k));
-            send_kth_frame_on_port(ap, k, base_dst_arr[3], base_src_arr[3], base_type_arr[3], payload_len_tbl[3][k]);
-            port_done[3] = 1'b1;
-            wait (!round_go);
-        end
-    end
+    //     for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
+    //         wait (round_go && (round_idx == k));
+    //         send_kth_frame_on_port(ap, k, base_dst_arr[3], base_src_arr[3], base_type_arr[3], payload_len_tbl[3][k]);
+    //         port_done[3] = 1'b1;
+    //         wait (!round_go);
+    //     end
+    // end
 
     // ----------------------------
     // Controller process
@@ -258,60 +262,74 @@ module tb_rx_top;
     initial begin : CTRL_PROC
         int unsigned seed;
 
-        // Init control signals
-        start_go  = 1'b0;
-        round_go  = 1'b0;
-        round_idx = 0;
-        port_done = '0;
+        // // Init control signals
+        // start_go  = 1'b0;
+        // round_go  = 1'b0;
+        // round_idx = 0;
+        // port_done = '0;
 
-        // Optional reproducible randomness
-        seed = 32'hC0FFEE01;
-        void'($urandom(seed));
+        // // Optional reproducible randomness
+        // seed = 32'hC0FFEE01;
+        // void'($urandom(seed));
 
-        init_gmii();
+        // init_gmii();
 
-        // Reset
-        switch_rst_n = 1'b0;
-        repeat(10) @(posedge switch_clk);
-        switch_rst_n = 1'b1;
-        repeat(10) @(posedge switch_clk);
+        // // Reset
+        // switch_rst_n = 1'b0;
+        // repeat(10) @(posedge switch_clk);
+        // switch_rst_n = 1'b1;
+        // repeat(10) @(posedge switch_clk);
 
-        $display("\n=== RX parallel 4-port, 3-packet/port test (random payload 48..300, lockstep, NO fork) ===");
-        $display("NUM_PORTS=%0d, pkts/port=%0d", NUM_PORTS, NUM_PKTS_PER_PORT);
+        // $display("\n=== RX parallel 4-port, 3-packet/port test (random payload 48..300, lockstep, NO fork) ===");
+        // $display("NUM_PORTS=%0d, pkts/port=%0d", NUM_PORTS, NUM_PKTS_PER_PORT);
 
-        // Precompute random payload lengths
-        for (int p = 0; p < NUM_PORTS; p++) begin
-            for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
-                payload_len_tbl[p][k] = $urandom_range(MAX_PAYLOAD_LEN, MIN_PAYLOAD_LEN);
-            end
-        end
+        // // Precompute random payload lengths
+        // for (int p = 0; p < NUM_PORTS; p++) begin
+        //     for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
+        //         payload_len_tbl[p][k] = $urandom_range(MAX_PAYLOAD_LEN, MIN_PAYLOAD_LEN);
+        //     end
+        // end
 
-        // Initialize per-port bases
-        for (int p = 0; p < NUM_PORTS; p++) begin
-            base_dst_arr[p]  = 48'h10_20_30_40_50_00 + {16'h0, p[31:0]};
-            base_src_arr[p]  = 48'h00_11_22_33_44_00 + {16'h0, p[31:0]};
-            base_type_arr[p] = 16'h0800 + p[15:0];
-        end
+        // // Initialize per-port bases
+        // for (int p = 0; p < NUM_PORTS; p++) begin
+        //     base_dst_arr[p]  = 48'h10_20_30_40_50_00 + {16'h0, p[31:0]};
+        //     base_src_arr[p]  = 48'h00_11_22_33_44_00 + {16'h0, p[31:0]};
+        //     base_type_arr[p] = 16'h0800 + p[15:0];
+        // end
 
-        // Release workers
-        @(posedge gmii_rx_clk);
-        start_go = 1'b1;
+        // // Release workers
+        // @(posedge gmii_rx_clk);
+        // start_go = 1'b1;
 
-        // Lockstep rounds driven by handshake
-        for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
-            port_done = '0;
-            round_idx = k;
-            round_go  = 1'b1;
+        // // Lockstep rounds driven by handshake
+        // for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
+        //     port_done = '0;
+        //     round_idx = k;
+        //     round_go  = 1'b1;
 
-            // Wait all ports finish this round
-            wait (&port_done);
+        //     // Wait all ports finish this round
+        //     wait (&port_done);
 
-            // Drop round flag so workers can advance
-            round_go = 1'b0;
+        //     // Drop round flag so workers can advance
+        //     round_go = 1'b0;
 
-            // Give a GMII edge for clean observation
-            @(posedge gmii_rx_clk);
-        end
+        //     // Give a GMII edge for clean observation
+        //     @(posedge gmii_rx_clk);
+        // end
+
+        // MAC learning duplicate test: send same MAC twice on two ports
+        $display("\n=== MAC learning duplicate test ===");
+        learn_dst = 48'hAA_BB_CC_DD_EE_00;
+        learn_src = 48'h12_34_56_78_9A_00;
+        learn_type = 16'h9000;
+
+        // Port 0 duplicate frames
+        send_simple_frame(learn_dst, learn_src, learn_type, 64, port_t'(0));
+        send_simple_frame(learn_dst, learn_src, learn_type, 72, port_t'(0));
+
+        // Port 1 duplicate frames
+        send_simple_frame(learn_src, learn_dst + 1, learn_type + 1, 80, port_t'(1));
+        send_simple_frame(learn_src, learn_dst + 1, learn_type + 1, 88, port_t'(1));
 
         // Give the switch domain time after all completes
         repeat(200) @(posedge switch_clk);
