@@ -206,6 +206,7 @@ module rx_top #(
         .data_start_addr_i(memory_write_ctrl_start_addr),
         .data_error_i(rx_mac_control_frame_error),
         .eop_i(rx_mac_control_frame_eof),
+        .sof_i(rx_mac_control_frame_sof),
 
         .port_o           (arbiter_port),
         .rx_mac_src_addr_o(arbiter_rx_mac_src_addr),

@@ -43,6 +43,7 @@ module arbiter #(
     input logic [ADDR_W-1:0] data_start_addr_i [N-1:0],
     input logic data_error_i [N-1:0],
     input logic eop_i [N-1:0],
+    input logic sof_i [N-1:0],
 
     // to address learn table
     output logic [$clog2(N)-1:0] port_o,
@@ -79,6 +80,8 @@ module arbiter #(
 );  
     import mem_pkg::*;
     logic [$clog2(N)-1:0] cur;
+
+    logic [N-1:0] eop_ack;
 
      //// Memory write port arbitration ////
     assign mem_we_o = mem_we_i[cur];
@@ -127,8 +130,8 @@ module arbiter #(
     assign rx_mac_src_addr_o = rx_mac_src_addr_i[cur];
     assign rx_mac_dst_addr_o = rx_mac_dst_addr_i[cur];
     assign data_start_addr_o = data_start_addr_i[cur];
-    assign eop_o = eop_i[cur];
-    // & ~data_error_i[cur];
+    assign eop_o = eop_i[cur] & ~eop_ack[cur];
+    // TODO: & ~data_error_i[cur];
 
     //// memory read control arbitration ////
     logic [$clog2(N)-1:0] cur_mem_read_port;
@@ -144,9 +147,12 @@ module arbiter #(
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             cur_mem_read_port <= 0;
+            eop_ack <= 0;
         end
         else begin
             if (mem_rvalid_i) cur_mem_read_port <= cur_mem_read_port + 1;
+            if (eop_i[cur]) eop_ack[cur] <= 1;
+            if (sof_i[cur]) eop_ack[cur] <= 0;
         end
     end
 endmodule
