@@ -1,4 +1,6 @@
-module voq (
+module voq #(
+    parameter int ADDR_W = 12
+)(
     input logic clk, rst_n,
     input logic write_req_i,
     input logic [ADDR_W-1:0] ptr_i,
@@ -6,6 +8,8 @@ module voq (
     output logic [ADDR_W-1:0] ptr_o,
     output logic ptr_valid_o
 );
+
+import voq_pkg::*;
 
 typedef enum logic[1:0] {STATE_EMPTY, STATE_NORMAL, STATE_FULL} state_t;
 
@@ -23,12 +27,19 @@ always_ff @(posedge clk or negedge rst_n) begin
     else begin
         case (state)
             STATE_EMPTY: begin
-                if (write_req_i) begin
-                    voq_table[voq_w_ptr] <= ptr_i;
-                    voq_w_ptr <= voq_w_ptr + 1;
-                    state <= STATE_NORMAL;
-                end
                 ptr_valid_o <= 1'b0;
+                if (write_req_i) begin
+                    if (read_req_i) begin
+                        // simultaneous write and read
+                        ptr_o <= ptr_i;
+                        ptr_valid_o <= 1'b1;
+                    end
+                    else begin
+                        voq_table[voq_w_ptr] <= ptr_i;
+                        voq_w_ptr <= voq_w_ptr + 1;
+                        state <= STATE_NORMAL;
+                    end
+                end
             end
             STATE_NORMAL: begin
                 if (write_req_i) begin
