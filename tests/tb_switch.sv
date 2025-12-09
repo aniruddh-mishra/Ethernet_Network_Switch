@@ -24,7 +24,7 @@ module tb_switch;
 
     logic gmii_tx_clk_o [NUM_PORTS-1:0];
     logic [DATA_WIDTH-1:0] gmii_tx_data_o [NUM_PORTS-1:0];
-    logic gmii_tx_dv_o [NUM_PORTS-1:0];
+    logic gmii_tx_en_o [NUM_PORTS-1:0];
     logic gmii_tx_er_o [NUM_PORTS-1:0];
 
     logic switch_clk, switch_rst_n;
@@ -81,7 +81,7 @@ module tb_switch;
         // GMII Outputs
         .gmii_tx_clk_o(gmii_tx_clk_o),
         .gmii_tx_data_o(gmii_tx_data_o),
-        .gmii_tx_dv_o(gmii_tx_dv_o),
+        .gmii_tx_en_o(gmii_tx_en_o),
         .gmii_tx_er_o(gmii_tx_er_o)
     );
 
