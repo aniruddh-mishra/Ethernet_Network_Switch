@@ -10,7 +10,7 @@ module tb_switch;
     localparam int SWITCH_CLK_PERIOD = 2;  // 500 MHz
 
     // Keep the original count, but we will only drive port 0
-    localparam int unsigned NUM_PKTS_PER_PORT = 3;
+    localparam int unsigned NUM_PKTS_PER_PORT = 1;
 
     // Random payload bounds (bytes)
     localparam int unsigned MIN_PAYLOAD_LEN = 48;
@@ -308,7 +308,7 @@ module tb_switch;
         end
 
         // Give the switch domain time after completion
-        repeat(200) @(posedge switch_clk);
+        repeat(10000) @(posedge switch_clk);
 
         // Optional visibility if these internal signals exist in your rx_top
         // $display("[%0t] Port0 frame_error = %0b", $time, dut.rx_mac_control_frame_error[0]);

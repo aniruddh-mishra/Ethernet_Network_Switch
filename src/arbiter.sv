@@ -177,7 +177,8 @@ module arbiter #(
                     cur_mem_read_port <= cur_mem_read_port + 1;
             end
             else begin
-                cur_mem_read_port <= cur_mem_read_port + 1;
+                if (!mem_re_i[cur_mem_read_port])
+                    cur_mem_read_port <= cur_mem_read_port + 1;
             end
             if (eop_i[cur]) eop_ack[cur] <= 1;
             if (sof_i[cur]) eop_ack[cur] <= 0;

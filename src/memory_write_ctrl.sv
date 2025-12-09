@@ -36,7 +36,6 @@ module memory_write_ctrl (
 
     // locals
     state_t state, state_n;
-    footer_t footer;
 
     logic [PAYLOAD_BITS-1:0] payload_reg;
     logic [$clog2(BLOCK_BYTES)-1:0] beat_cnt;
@@ -123,14 +122,17 @@ module memory_write_ctrl (
                 WRITE_FOOTER: begin
                     if (data_valid_i || data_end_i || payload_data_end) begin
                         if (mem_ready_i) begin
-                            footer.next_idx <= next_idx;
-                            footer.eop <= data_end_i;
-                            footer.rsvd <= 0;
+                            footer_t footer_tmp;  
+
+                            footer_tmp.next_idx = next_idx;
+                            footer_tmp.eop      = data_end_i | payload_data_end;
+                            footer_tmp.rsvd     = 1'b0;
+
                             payload_data_end <= 0;
 
                             if (!data_end_i && !payload_data_end) begin
                                 beat_cnt <= 0;
-                                frame_allocated <= 1; // next_idx already allocated;
+                                frame_allocated <= 1;
                                 next_frame_allocated <= 0;
                                 curr_idx <= next_idx;
 
@@ -140,10 +142,10 @@ module memory_write_ctrl (
                                 end
                             end
 
-                            mem_addr_o <= curr_idx;
-                            mem_wdata_o <= { payload_reg , footer };
-                            mem_we_o <= 1'b1;
-                            frame_cnt <= frame_cnt + 1;
+                            mem_addr_o  <= curr_idx;
+                            mem_wdata_o <= { payload_reg, footer_tmp }; // uses new footer
+                            mem_we_o    <= 1'b1;
+                            frame_cnt   <= frame_cnt + 1;
                         end
                     end
                 end
