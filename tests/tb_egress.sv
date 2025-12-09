@@ -2,6 +2,9 @@
 
 module tb_egress;
   import switch_pkg::*;
+  import mem_pkg::*;    // provides ADDR_W
+
+  localparam int DATA_WIDTH = rx_tx_pkg::DATA_WIDTH;
 
   logic switch_clk = 0;
   logic switch_rst_n = 0;
@@ -29,7 +32,7 @@ module tb_egress;
   always #5 switch_clk = ~switch_clk;
 
   // DUT instantiation
-  egress dut (
+  egress #(.ADDR_W(ADDR_W)) dut (
     .gmii_tx_clk_o(gmii_tx_clk_o),
     .gmii_tx_data_o(gmii_tx_data_o),
     .gmii_tx_en_o(gmii_tx_en_o),
@@ -67,7 +70,8 @@ module tb_egress;
         frame_valid_i = 1'b1;
         frame_end_i   = (beat == beats-1);
         for (int b = 0; b < BLOCK_BYTES; b++) begin
-          frame_data_i[b] = beat + b + frame_id*16;
+          int data = beat + b + frame_id*16;
+          frame_data_i[b] = data[7:0];
         end
         beat++;
       end else begin
@@ -84,6 +88,9 @@ module tb_egress;
 
   // Reset and stimulus
   initial begin
+    $dumpfile("tb_egress.vcd");
+    $dumpvars(0, tb_egress);
+
     voq_write_req_i = 0;
     voq_ptr_i       = '0;
     frame_valid_i   = 0;

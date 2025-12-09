@@ -1,4 +1,7 @@
-module tx_mac_control (
+module tx_mac_control #(
+    parameter ADDR_W = 6,
+    parameter BLOCK_BYTES = 64
+)(
     // GMII interface
     output logic gmii_tx_clk_o,
     output logic [DATA_WIDTH-1:0] gmii_tx_data_o,
@@ -21,7 +24,6 @@ module tx_mac_control (
     output logic voq_ready_o // always high when ready to start frame
 );
 
-import mem_pkg::*;
 import rx_tx_pkg::*;
 import voq_pkg::*;
 
