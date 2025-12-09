@@ -10,6 +10,7 @@ import mem_pkg::*;
     - all logic with block_ctr == 62 and 63 in DATA  
 */
 
+
 module tb_tx;
 
 // Parameters
@@ -48,11 +49,8 @@ logic [7:0] captured_frame[$];
 
 // DUT instantiation
 tx_mac_control #(
-    .DATA_WIDTH(DATA_WIDTH),
     .ADDR_W(ADDR_W),
-    .BLOCK_BYTES(BLOCK_BYTES),
-    .PREAMBLE_BYTE(PREAMBLE_BYTE),
-    .SFD_BYTE(SFD_BYTE)
+    .BLOCK_BYTES(BLOCK_BYTES)
 ) dut (
     .gmii_tx_clk_o(gmii_tx_clk_o),
     .gmii_tx_data_o(gmii_tx_data_o),
@@ -75,6 +73,11 @@ tx_mac_control #(
 initial begin
     switch_clk = 0;
     forever #1 switch_clk = ~switch_clk; // 2ns period = 500MHz
+end
+
+initial begin
+    $dumpfile("tb_tx.vcd");
+    $dumpvars(0, tb_tx);
 end
 
 // GMII transmit data capture
@@ -103,6 +106,7 @@ task send_frame(input [ADDR_W-1:0] start_addr, input int frame_size_bytes);
     int blocks_needed;
     int i, j;
     logic [7:0] test_data;
+    logic [31:0] test_data_temp;
     
     blocks_needed = (frame_size_bytes + BLOCK_BYTES - 1) / BLOCK_BYTES;
     
@@ -136,7 +140,8 @@ task send_frame(input [ADDR_W-1:0] start_addr, input int frame_size_bytes);
             // Prepare block data
             for (j = 0; j < BLOCK_BYTES; j++) begin
                 if ((i * BLOCK_BYTES + j) < frame_size_bytes) begin
-                    test_data = (i * BLOCK_BYTES + j) & 8'hFF;
+                    test_data_temp = i * BLOCK_BYTES + j; 
+                    test_data = test_data_temp[7:0] & 8'hFF;
                     frame_data_i[j] = test_data;
                 end else begin
                     frame_data_i[j] = 8'h00;
@@ -167,6 +172,7 @@ endtask
 task verify_frame(input int expected_payload_size);
     int i;
     logic [7:0] expected_data;
+    logic [31:0] temp_expected_data;
     int preamble_count;
     preamble_count = 0;
     
@@ -198,7 +204,8 @@ task verify_frame(input int expected_payload_size);
     
     // Verify payload data
     for (i = 0; i < expected_payload_size; i++) begin
-        expected_data = i & 8'hFF;
+        temp_expected_data = i;
+        expected_data = temp_expected_data[7:0] & 8'hFF;
         if (captured_frame[i + 8] !== expected_data) begin
             $display("ERROR: Payload byte %0d incorrect! Expected 0x%0h, got 0x%0h", 
                      i, expected_data, captured_frame[i + 8]);

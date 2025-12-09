@@ -85,6 +85,7 @@ logic mem_req_flag, next_mem_req_flag; // flag for one cycle mem_re_o
 logic prev_mem_re_o; // previous cycle request
 logic saved_frame_end_i, next_saved_frame_end_i; // latch frame_end_i when requesting next block
 logic mem_stalled; assign mem_stalled = prev_mem_re_o && !frame_valid_i; // mem read requested but no valid data
+logic [ADDR_W-1:0] saved_mem_start_addr_o, next_saved_mem_start_addr_o;
 
 // block buffer
 logic [BLOCK_BYTES-1:0][DATA_WIDTH-1:0] block_buffer, next_block_buffer;
@@ -107,6 +108,7 @@ always_comb begin
     mem_start_o = 1'b0;
     mem_start_addr_o = 0;
     voq_ready_o = 1'b0;
+    next_saved_mem_start_addr_o = saved_mem_start_addr_o;
     next_block_buffer = block_buffer;
     next_mem_req_flag = mem_req_flag;
     // next_frame_tx_error = 1'b0;
@@ -118,46 +120,55 @@ always_comb begin
     case (current_state)
         IDLE: begin
             next_IFG_ctr = 0;
-            next_block_ctr = 1; // use as a flag that no block is currently latched
-            if (!voq_valid_i) voq_ready_o = 1'b1; // tell voq ready for next frame
+            next_block_ctr = 1; // use 1 as a flag
+            if (!voq_valid_i && (block_ctr == 1)) voq_ready_o = 1'b1; // tell voq ready for next frame
             else begin
-                mem_start_addr_o = voq_ptr_i; // feed voq starting addr to mem read ctrl
-                mem_start_o = 1'b1; // start signal
-                mem_re_o = 1'b1; 
+                if (block_ctr == 1) begin
+                    $display("TX MAC CTRL: Starting frame transmission from VOQ ptr 0x%0h", voq_ptr_i);
+                    mem_start_addr_o = voq_ptr_i; // feed voq starting addr to mem read ctrl
+                    next_saved_mem_start_addr_o = voq_ptr_i; // save starting addr
+                    mem_start_o = 1'b1; // start signal
+                    mem_re_o = 1'b1; 
+                    next_block_ctr = 0; // indicate req has been sent
+                end else begin
+                    if (mem_stalled) begin // mem is stalled, wait in IDLE instead of jumping to preamble early
+                        $display("TX MAC CTRL: Memory read stalled while starting frame transmission, mem_stalled = pre_mem_re_o = %b && !frame_valid_i = %b", prev_mem_re_o, !frame_valid_i);
+                        mem_start_addr_o = saved_mem_start_addr_o;
+                        mem_start_o = 1'b1; // keep start high too
+                        mem_re_o = 1'b1; 
+                        next_mem_stall_count = mem_stall_count + 1;
+                    end else begin // mem ready, jump to preamble
+                        $display("TX MAC CTRL: Memory read ready, beginning frame transmission");
+                        next_block_buffer = frame_data_i;
+                        next_saved_frame_end_i = frame_end_i; // set frame_end_i for first cycle
 
-                fifo_din = PREAMBLE_BYTE; // immediately begin sending preamble
-                fifo_wr_en = 1'b1;
-                next_preamble_ctr = 1; // reset ctr
+                        fifo_din = PREAMBLE_BYTE; // immediately begin sending preamble
+                        fifo_wr_en = 1'b1;
+                        next_preamble_ctr = 1; // reset ctr
 
-                next_state = PREAMBLE;
+                        next_state = PREAMBLE;
+                    end
+                end
             end
         end
         PREAMBLE: begin // write 7 preamble bytes + 1 SFD byte
             // latch entire block on first cycle
-            if (block_ctr == 1) begin
-                if (mem_stalled) begin // mem is stalled, not error until fifo gets empty
-                    mem_re_o = 1'b1; 
-                    next_mem_stall_count = mem_stall_count + 1;
-                end else begin
-                    next_block_buffer = frame_data_i;
-                    next_saved_frame_end_i = frame_end_i; // set frame_end_i for first cycle
-                    next_block_ctr = 0; // reset ctr
-                end
-            end
 
             if (!fifo_full) begin
                 if (preamble_ctr < 7) begin 
                     fifo_din = PREAMBLE_BYTE;
+                    $display("TX MAC CTRL: Sending preamble byte at preamble_ctr %0d", preamble_ctr);
                 end else begin
                     fifo_din = SFD_BYTE;
                     next_state = DATA;
+                    $display("TX MAC CTRL: Sending SFD byte at preamble_ctr %0d", preamble_ctr);
                 end
                 fifo_wr_en = 1'b1;
                 next_preamble_ctr = preamble_ctr + 1;
             end
         end
-        DATA: begin
-            if ((block_ctr == 62) && !saved_frame_end_i) begin // request next block if not last block
+        DATA: begin // frame_data_i[63] is the footer byte, ignore
+            if ((block_ctr == 61) && !saved_frame_end_i) begin // request next block if not last block
                 if (!mem_req_flag) begin 
                     mem_re_o = 1'b1; // only assert mem_re_o for one cycle
                     next_saved_frame_end_i = frame_end_i; // latch current frame_end_i before it's updated
@@ -166,7 +177,7 @@ always_comb begin
                     mem_re_o = 1'b1; // stuck here for multiple cycles, so only keep asserting mem_re_o if stalled
                     next_saved_frame_end_i = frame_end_i; // latch current frame_end_i before it's updated
                 end
-            end else if (block_ctr == 63) begin
+            end else if (block_ctr == 62) begin
                 next_mem_req_flag = 1'b0; // reset mem req flag
                 if (saved_frame_end_i && !fifo_full) begin // finish writing last byte, then move to IFG
                     next_tx_frame_count = tx_frame_count + 1;
@@ -206,8 +217,9 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         // voq_ready_o <= 0;
         preamble_ctr <= 0;
         IFG_ctr <= 0;
-        block_ctr <= 0;
+        block_ctr <= 1;
         block_buffer <= 0;
+        saved_mem_start_addr_o <= 0;
         tx_frame_count <= 0;
         mem_stall_count <= 0;
         mem_req_flag <= 0;
@@ -227,6 +239,7 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         IFG_ctr <= next_IFG_ctr;
         block_ctr <= next_block_ctr;
         block_buffer <= next_block_buffer;
+        saved_mem_start_addr_o <= next_saved_mem_start_addr_o;
         tx_frame_count <= next_tx_frame_count;
         mem_stall_count <= next_mem_stall_count;
         mem_req_flag <= next_mem_req_flag;
