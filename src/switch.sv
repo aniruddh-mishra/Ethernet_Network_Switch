@@ -1,15 +1,21 @@
-module rx_top #(
+module switch #(
     parameter int NUM_PORTS = 4
 ) (
-    // GMII interface
-    input logic gmii_rx_clk_i,
+    // GMII Inputs
+    input logic gmii_rx_clk_i [NUM_PORTS-1:0],
     input logic [DATA_WIDTH-1:0] gmii_rx_data_i [NUM_PORTS-1:0],
     input logic gmii_rx_dv_i [NUM_PORTS-1:0],
     input logic gmii_rx_er_i [NUM_PORTS-1:0],
 
     // switch's clk domain
     input logic switch_clk,
-    input logic switch_rst_n
+    input logic switch_rst_n,
+
+    // GMII Outputs
+    output logic gmii_tx_clk_o [NUM_PORTS-1:0],
+    output logic [DATA_WIDTH-1:0] gmii_tx_data_o [NUM_PORTS-1:0],
+    output logic gmii_tx_dv_o [NUM_PORTS-1:0],
+    output logic gmii_tx_er_o [NUM_PORTS-1:0]
 );
 
     import mem_pkg::*;
@@ -86,23 +92,29 @@ module rx_top #(
     // Prefix: sram_
     // =========================================================
     logic [BLOCK_BITS-1:0] sram_rdata;
+    logic                  sram_rvalid;
 
     //// memory read control arbitration ////
     // from memory read ctrl
-    logic mem_re_i [NUM_PORTS-1:0]; assign mem_re_i = '{default:0};
-    logic [ADDR_W-1:0] mem_raddr_i [NUM_PORTS-1:0]; assign mem_raddr_i = '{default:0};
+    logic [ADDR_W-1:0] memory_read_ctrl_addr [NUM_PORTS-1:0];
+    logic memory_read_ctrl_re [NUM_PORTS-1:0];
 
-    // from memory
-    logic mem_rvalid_i; assign mem_rvalid_i = 0;
-    logic [BLOCK_BITS-1:0] mem_rdata_i; assign mem_rdata_i = 0;
+    logic [BLOCK_BITS-1:0] memory_read_ctrl_data [NUM_PORTS-1:0];
+    logic memory_read_ctrl_data_valid [NUM_PORTS-1:0];
+    logic memory_read_ctrl_data_end [NUM_PORTS-1:0];
 
     // freeing logic sent read controller
-    logic free_req_i [NUM_PORTS-1:0]; assign free_req_i = '{default:0};
-    logic [ADDR_W-1:0] free_block_idx_i [NUM_PORTS-1:0]; assign free_block_idx_i = '{default:0};
+    logic memory_read_ctrl_free_req [NUM_PORTS-1:0];
+    logic [ADDR_W-1:0] memory_read_ctrl_free_block_idx [NUM_PORTS-1:0];
 
     // Crossbar outputs
     logic [NUM_PORTS-1:0] crossbar_voq_write_reqs;
     logic [ADDR_W-1:0] crossbar_voq_start_ptrs [NUM_PORTS-1:0];
+
+    // Wires between memory read and egress
+    logic egress_re [NUM_PORTS-1:0];
+    logic egress_start [NUM_PORTS-1:0];
+    logic [ADDR_W-1:0] egress_addr [NUM_PORTS-1:0];
 
     // =========================================================
     // Instances
@@ -114,7 +126,7 @@ module rx_top #(
         for (p = 0; p < NUM_PORTS; p++) begin : GEN_RX_MAC
             rx_mac_control rx_mac_control_u (
                 // GMII interface
-                .gmii_rx_clk_i(gmii_rx_clk_i),
+                .gmii_rx_clk_i(gmii_rx_clk_i[p]),
                 .gmii_rx_data_i(gmii_rx_data_i[p]),
                 .gmii_rx_dv_i(gmii_rx_dv_i[p]),
                 .gmii_rx_er_i(gmii_rx_er_i[p]),
@@ -216,22 +228,22 @@ module rx_top #(
         //// Address learn table arbitration ////
 
         //// memory read control arbitration ////
-        .mem_re_i(mem_re_i),
-        .mem_raddr_i(mem_raddr_i),
+        .mem_re_i(memory_read_ctrl_re),
+        .mem_raddr_i(memory_read_ctrl_addr),
 
         .mem_re_o         (arbiter_mem_re),
         .mem_raddr_o      (arbiter_mem_raddr),
 
-        .mem_rvalid_i(mem_rvalid_i),
-        .mem_rdata_i(mem_rdata_i),
+        .mem_rvalid_i (sram_rvalid),
+        .mem_rdata_i (sram_rdata),
 
         .mem_rvalid_o     (arbiter_mem_rvalid),
         .mem_rdata_o      (arbiter_mem_rdata),
 
-        .free_req_i(free_req_i),
-        .free_block_idx_i(free_block_idx_i),
+        .free_req_i (memory_read_ctrl_free_req),
+        .free_block_idx_i (memory_read_ctrl_free_block_idx),
 
-        .free_req_o       (arbiter_free_req),
+        .free_req_o (arbiter_free_req),
         .free_block_idx_o (arbiter_free_block_idx)
     );
 
@@ -241,8 +253,8 @@ module rx_top #(
         .rst_n(switch_rst_n),
 
         // alloc
-        .alloc_req_i(arbiter_fl_alloc_req),
-        .alloc_gnt_o        (fl_alloc_gnt),
+        .alloc_req_i (arbiter_fl_alloc_req),
+        .alloc_gnt_o (fl_alloc_gnt),
         .alloc_block_idx_o  (fl_alloc_block_idx),
 
         // free
@@ -252,13 +264,15 @@ module rx_top #(
 
     // 1 x sram
     sram sram_u (
-        .clk(switch_clk),
-        .we(arbiter_mem_we),
-        .re(arbiter_mem_re),
-        .r_addr(arbiter_mem_raddr),
-        .w_addr(arbiter_mem_waddr),
-        .wdata(arbiter_mem_wdata),
-        .rdata   (sram_rdata)
+        .clk (switch_clk),
+        .rst_n (switch_rst_n),
+        .we (arbiter_mem_we),
+        .re (arbiter_mem_re),
+        .r_addr (arbiter_mem_raddr),
+        .w_addr (arbiter_mem_waddr),
+        .wdata (arbiter_mem_wdata),
+        .rdata (sram_rdata),
+        .rvalid (sram_rvalid)
     );
 
     crossbar #(
@@ -274,5 +288,59 @@ module rx_top #(
         .voq_write_reqs_o(crossbar_voq_write_reqs),
         .voq_start_ptrs_o(crossbar_voq_start_ptrs)
     );
+
+    // NUM_PORTS x memory_read_ctrl
+    generate
+        for (p = 0; p < NUM_PORTS; p++) begin : GEN_MEM_R
+            memory_read_ctrl memory_read_ctrl_u (
+                .clk(switch_clk),
+                .rst_n(switch_rst_n),
+
+                // memory write data, 1 byte / 8 bit beats
+                .re_i(egress_re[p]),
+                .start(egress_start[p]),
+                .start_addr_i(egress_addr[p]),
+                
+                // to memory
+                .mem_re_o(memory_read_ctrl_re[p]),
+                .mem_raddr_o(memory_read_ctrl_addr[p]),
+
+                // from memory (1 cycle later)
+                .mem_rvalid_i(arbiter_mem_rvalid[p]),
+                .mem_rdata_i(arbiter_mem_rdata[p]),
+
+                // interface with consumer
+                .data_o(memory_read_ctrl_data[p]), // unused
+                .data_valid_o(memory_read_ctrl_data_valid[p]), // unused
+                .data_end_o(), // unused
+
+                // interface with free list to free
+                .free_req_o(memory_read_ctrl_free_req[p]),
+                .free_block_idx_o(memory_read_ctrl_free_block_idx[p])
+            );
+        end
+    endgenerate
+
+    // NUM_PORTS x egress
+    generate
+        for (p = 0; p < NUM_PORTS; p++) begin : GEN_EGRESS
+            egress #(.ADDR_W(ADDR_W)) egress_u (
+                .gmii_tx_clk_o(gmii_tx_clk_o[p]),
+                .gmii_tx_data_o(gmii_tx_data_o[p]),
+                .gmii_tx_en_o(gmii_tx_dv_o[p]),
+                .gmii_tx_er_o(gmii_tx_er_o[p]),
+                .switch_clk(switch_clk),
+                .switch_rst_n(switch_rst_n),
+                .voq_write_req_i(crossbar_voq_write_reqs[p]),
+                .voq_ptr_i(crossbar_voq_start_ptrs[p]),
+                .mem_re_o(egress_re[p]),
+                .mem_start_o(egress_start[p]),
+                .mem_start_addr_o(egress_addr[p]),
+                .frame_data_i(memory_read_ctrl_data[p]),
+                .frame_valid_i(memory_read_ctrl_data_valid[p]),
+                .frame_end_i(memory_read_ctrl_data_end[p])
+            );
+        end
+    endgenerate    
 
 endmodule
