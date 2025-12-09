@@ -82,6 +82,8 @@ module arbiter #(
     logic [$clog2(N)-1:0] cur;
 
     logic [N-1:0] eop_ack;
+    logic latched_mem_re [N-1:0];
+    logic latched_fl_alloc_req [N-1:0];
 
      //// Memory write port arbitration ////
     assign mem_we_o = mem_we_i[cur];
@@ -117,10 +119,21 @@ module arbiter #(
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             cur_fl_alloc_port <= 0;
+            latched_fl_alloc_req[0] <= 0;
+            latched_fl_alloc_req[1] <= 0;
+            latched_fl_alloc_req[2] <= 0;
+            latched_fl_alloc_req[3] <= 0;
         end
         else begin
-            if ((fl_alloc_req_i[cur_fl_alloc_port] && fl_alloc_gnt_i) | !fl_alloc_req_i[cur_fl_alloc_port])
-                cur_fl_alloc_port <= cur_fl_alloc_port + 1;
+            latched_fl_alloc_req <= fl_alloc_req_i;
+            if (latched_fl_alloc_req[cur_fl_alloc_port]) begin
+                if (fl_alloc_gnt_i) 
+                    cur_fl_alloc_port <= cur_fl_alloc_port + 1;
+            end
+            else begin
+                if (!fl_alloc_req_i[cur_fl_alloc_port])
+                    cur_fl_alloc_port <= cur_fl_alloc_port + 1;
+            end
         end
     end
     //// Free list allocation arbitration ////
@@ -139,7 +152,11 @@ module arbiter #(
     assign free_req_o = free_req_i[cur_mem_read_port - 1];
     assign free_block_idx_o = free_block_idx_i[cur_mem_read_port - 1];
 
-    assign mem_rvalid_o[cur_mem_read_port] = mem_rvalid_i;
+    always_comb begin
+        mem_rvalid_o = '{default:0};
+        mem_rvalid_o[cur_mem_read_port] = mem_rvalid_i;
+    end
+
     assign mem_rdata_o[cur_mem_read_port] = mem_rdata_i;
     assign mem_raddr_o = mem_rvalid_i ? mem_raddr_i[cur_mem_read_port + 1] : mem_raddr_i[cur_mem_read_port];
     assign mem_re_o = mem_rvalid_i ? mem_re_i[cur_mem_read_port + 1] : mem_re_i[cur_mem_read_port];
@@ -148,9 +165,20 @@ module arbiter #(
         if (!rst_n) begin
             cur_mem_read_port <= 0;
             eop_ack <= 0;
+            latched_mem_re[0] <= 0;
+            latched_mem_re[1] <= 0;
+            latched_mem_re[2] <= 0;
+            latched_mem_re[3] <= 0;
         end
         else begin
-            if (mem_rvalid_i) cur_mem_read_port <= cur_mem_read_port + 1;
+            latched_mem_re <= mem_re_i;
+            if (latched_mem_re[cur_mem_read_port]) begin
+                if (mem_rvalid_i)
+                    cur_mem_read_port <= cur_mem_read_port + 1;
+            end
+            else begin
+                cur_mem_read_port <= cur_mem_read_port + 1;
+            end
             if (eop_i[cur]) eop_ack[cur] <= 1;
             if (sof_i[cur]) eop_ack[cur] <= 0;
         end
