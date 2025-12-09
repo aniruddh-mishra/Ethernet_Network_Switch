@@ -108,10 +108,10 @@ module arbiter #(
     //// Free list allocation arbitration ////
     logic [$clog2(N)-1:0] cur_fl_alloc_port; // allocations must happen in order
     
-    assign fl_alloc_block_idx_o[cur_fl_alloc_port] = fl_alloc_block_idx_i;
-    assign fl_alloc_req_o = fl_alloc_gnt_i ? fl_alloc_req_i[cur_fl_alloc_port+1] : fl_alloc_req_i[cur_fl_alloc_port]; 
-
     always_comb begin
+        fl_alloc_block_idx_o[cur_fl_alloc_port] = fl_alloc_block_idx_i;
+        fl_alloc_req_o = fl_alloc_gnt_i ? fl_alloc_req_i[cur_fl_alloc_port+1] : fl_alloc_req_i[cur_fl_alloc_port]; 
+
         fl_alloc_gnt_o = '{default:0}; 
         fl_alloc_gnt_o[cur_fl_alloc_port] = fl_alloc_gnt_i;
     end
@@ -155,11 +155,11 @@ module arbiter #(
     always_comb begin
         mem_rvalid_o = '{default:0};
         mem_rvalid_o[cur_mem_read_port] = mem_rvalid_i;
-    end
 
-    assign mem_rdata_o[cur_mem_read_port] = mem_rdata_i;
-    assign mem_raddr_o = mem_rvalid_i ? mem_raddr_i[cur_mem_read_port + 1] : mem_raddr_i[cur_mem_read_port];
-    assign mem_re_o = mem_rvalid_i ? mem_re_i[cur_mem_read_port + 1] : mem_re_i[cur_mem_read_port];
+        mem_rdata_o[cur_mem_read_port] = mem_rdata_i;
+        mem_raddr_o = mem_rvalid_i ? mem_raddr_i[cur_mem_read_port + 1] : mem_raddr_i[cur_mem_read_port];
+        mem_re_o = mem_rvalid_i ? mem_re_i[cur_mem_read_port + 1] : mem_re_i[cur_mem_read_port];
+    end 
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
