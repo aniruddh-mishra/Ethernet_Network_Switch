@@ -119,11 +119,9 @@ always_comb begin
 
     case (current_state)
         IDLE: begin
-            next_IFG_ctr = 0;
-            next_block_ctr = 1; // use 1 as a flag
             if (!voq_valid_i && (block_ctr == 1)) voq_ready_o = 1'b1; // tell voq ready for next frame
             else begin
-                if (block_ctr == 1) begin
+                if (block_ctr == 1) begin // use block_ctr == 1 as flag that req has not been sent yet
                     $display("TX MAC CTRL: Starting frame transmission from VOQ ptr 0x%0h", voq_ptr_i);
                     mem_start_addr_o = voq_ptr_i; // feed voq starting addr to mem read ctrl
                     next_saved_mem_start_addr_o = voq_ptr_i; // save starting addr
@@ -200,6 +198,8 @@ always_comb begin
             next_IFG_ctr = IFG_ctr + 1;
             if (IFG_ctr == 11) begin // wait 11 times then go to IDLE (total 12 bytes)
                 voq_ready_o = 1'b1;
+                next_IFG_ctr = 0;
+                next_block_ctr = 1; // use 1 as a flag
                 next_state = IDLE;
             end
         end
