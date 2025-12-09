@@ -1,4 +1,6 @@
-module egress (
+module egress #(
+    parameter ADDR_W = mem_pkg::ADDR_W
+)(
     // GMII interface
     output logic gmii_tx_clk_o,
     output logic [DATA_WIDTH-1:0] gmii_tx_data_o,
@@ -14,8 +16,6 @@ module egress (
     input logic [ADDR_W-1:0] voq_ptr_i,
     
     // mem read interface
-    output logic mem_re_o,
-    output logic mem_start_o,
     output logic [ADDR_W-1:0] mem_start_addr_o,
     input logic [BLOCK_BYTES-1:0][DATA_WIDTH-1:0] frame_data_i,
     input logic frame_valid_i,
@@ -51,12 +51,10 @@ tx_mac_control tx_mac_control_u (
     .switch_rst_n(switch_rst_n),
     
     // mem read ctrl interface
-    .mem_re_o(mem_re_o),
-    .mem_start_o(mem_start_o),
-    .mem_start_addr_o(mem_start_addr_o),
     .frame_data_i(frame_data_i),
     .frame_valid_i(frame_valid_i),
-    .frame_end_i(frame_end_i),
+    .frame_eof_i(frame_end_i),
+    .mem_ptr_o(mem_start_addr_o),
     
     // VOQ signals
     .voq_valid_i(voq_ptr_valid),
