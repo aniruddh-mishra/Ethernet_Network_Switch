@@ -22,14 +22,20 @@ packages/voq_pkg.sv
 
 src/switch.sv
 src/address_table.sv
-src/fl.sv
-src/rx_mac_control.sv
-src/translator.sv
 src/arbiter.sv
-src/sram.sv
 src/async_fifo.sv
-src/memory_write_ctrl.sv
+src/crossbar.sv
+src/egress.sv
+src/fl.sv
+src/inputs.sv
 src/mac_controllers.sv
+src/mac_read_ctrl.sv
+src/memory_write_ctrl.sv
+src/outputs.sv 
+src/rx_mac_control.sv
+src/sram.sv
+src/translator.sv
+src/tx_mac_control.sv
 src/voq.sv
 
 tests/tb_switch.sv
