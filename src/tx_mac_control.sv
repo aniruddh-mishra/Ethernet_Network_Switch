@@ -73,7 +73,7 @@ typedef enum logic [1:0] {IDLE, PREAMBLE, DATA, IFG} state_t;
 state_t current_state, next_state;
 
 logic [2:0] preamble_ctr, next_preamble_ctr; // 8 bytes
-logic [3:0] IFG_ctr, next_IFG_ctr; // 12 bytes
+// logic [3:0] IFG_ctr, next_IFG_ctr; // 12 bytes
 logic [5:0] block_ctr, next_block_ctr; // 64 bytes
 
 // logic should be combinational to avoid cycle delay
@@ -101,7 +101,7 @@ always_comb begin
     // default values
     next_state = current_state;
     next_preamble_ctr = preamble_ctr;
-    next_IFG_ctr = IFG_ctr;
+    // next_IFG_ctr = IFG_ctr;
     next_block_ctr = block_ctr;
     fifo_wr_en = 1'b0;
     mem_re_o = 1'b0;
@@ -169,11 +169,9 @@ always_comb begin
             if ((block_ctr == 61) && !saved_frame_end_i) begin // request next block if not last block
                 if (!mem_req_flag) begin 
                     mem_re_o = 1'b1; // only assert mem_re_o for one cycle
-                    next_saved_frame_end_i = frame_end_i; // latch current frame_end_i before it's updated
                     next_mem_req_flag = 1'b1;
                 end else if (mem_stalled) begin 
                     mem_re_o = 1'b1; // stuck here for multiple cycles, so only keep asserting mem_re_o if stalled
-                    next_saved_frame_end_i = frame_end_i; // latch current frame_end_i before it's updated
                 end
             end else if (block_ctr == 62) begin
                 next_mem_req_flag = 1'b0; // reset mem req flag
@@ -191,14 +189,17 @@ always_comb begin
             if (!fifo_full) begin // only write with new data available + fifo not full, also don't update block ctr unless data written
                 fifo_din = block_buffer[block_ctr];
                 fifo_wr_en = 1'b1;
-                next_block_ctr = block_ctr + 1;
+                if (block_ctr == 62) begin
+                    next_block_ctr = 0; 
+                    next_saved_frame_end_i = frame_end_i; // latch current frame_end_i after all checks have been doing (and before it's updated next mem_re_o cycle)
+                end else begin
+                    next_block_ctr = block_ctr + 1;
+                end
             end
         end
         IFG: begin // maintain 12-byte IFG
-            next_IFG_ctr = IFG_ctr + 1;
-            if (IFG_ctr == 11) begin // wait 11 times then go to IDLE (total 12 bytes)
+            if (sync_ifg_ctr_full[1]) begin // wait 11 times in gmii clk domain then go to IDLE (total 12 bytes)
                 voq_ready_o = 1'b1;
-                next_IFG_ctr = 0;
                 next_block_ctr = 1; // use 1 as a flag
                 next_state = IDLE;
             end
@@ -206,6 +207,8 @@ always_comb begin
         default: next_state = IDLE;
     endcase
 end
+
+logic [1:0] sync_ifg_ctr_full;
 
 // state machine (switch clk domain) - seq logic
 always_ff @(posedge switch_clk or negedge switch_rst_n) begin
@@ -216,7 +219,7 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         // mem_start_addr_o <= 0;
         // voq_ready_o <= 0;
         preamble_ctr <= 0;
-        IFG_ctr <= 0;
+        // IFG_ctr <= 0;
         block_ctr <= 1;
         block_buffer <= 0;
         saved_mem_start_addr_o <= 0;
@@ -236,7 +239,7 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         // mem_start_addr_o <= next_mem_start_addr_o;
         // voq_ready_o <= next_voq_ready_o;
         preamble_ctr <= next_preamble_ctr;
-        IFG_ctr <= next_IFG_ctr;
+        // IFG_ctr <= next_IFG_ctr;
         block_ctr <= next_block_ctr;
         block_buffer <= next_block_buffer;
         saved_mem_start_addr_o <= next_saved_mem_start_addr_o;
@@ -244,6 +247,8 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         mem_stall_count <= next_mem_stall_count;
         mem_req_flag <= next_mem_req_flag;
         // frame_tx_error <= next_frame_tx_error;
+
+        sync_ifg_ctr_full <= {sync_ifg_ctr_full[0], (gmii_IFG_ctr == 11)};
 
         prev_mem_re_o <= mem_re_o;
         saved_frame_end_i <= next_saved_frame_end_i;
@@ -257,20 +262,33 @@ end
 logic prev_fifo_rd_en;
 assign fifo_rd_en = !fifo_empty; // continuous read when data available
 assign gmii_tx_en_o = prev_fifo_rd_en; // tx_en follows
-assign gmii_tx_er_o = fifo_empty && !frame_end_i; // error if fifo underflow, could be from mem stalling during frame transmission, assume empty on frame end is ok, if not, rx will catch it with crc error 
+assign gmii_tx_er_o = fifo_empty && (current_state != DATA); // error if fifo underflow, could be from mem stalling but must be during frame transmission 
+
+logic [3:0] gmii_IFG_ctr; // 12 bytes
+logic [1:0] gmii_sync_current_state_idle;
 
 // simple gmii
 always_ff @(posedge gmii_tx_clk_o or negedge sync_switch_rst_n) begin
     if (!sync_switch_rst_n) begin
         fifo_underflow_count <= 0;
         prev_fifo_rd_en <= 0;
+        gmii_IFG_ctr <= 0;
+        gmii_sync_current_state_idle <= 0;
     end else begin
         prev_fifo_rd_en <= fifo_rd_en;
 
+        gmii_sync_current_state_idle <= {gmii_sync_current_state_idle[0], (current_state == IDLE)}; // sync current state to gmii clk domain
+
         // gmii_tx_error_ff <= {gmii_tx_error_ff[0], frame_tx_error};
 
-        // debug
-        if (fifo_empty) fifo_underflow_count <= fifo_underflow_count + 1;
+        
+        if (fifo_empty) begin
+            if (gmii_IFG_ctr < 11) gmii_IFG_ctr <= gmii_IFG_ctr + 1;
+            else if (gmii_sync_current_state_idle[1]) gmii_IFG_ctr <= 0; // reset after 12 bytes and switch clk domain logic ack
+            fifo_underflow_count <= fifo_underflow_count + 1; // debug
+        end else begin
+            gmii_IFG_ctr <= 0; // reset IFG ctr when data available, this will always be reset when the last byte of data sent at the end of the frame
+        end
     end
 end
 
