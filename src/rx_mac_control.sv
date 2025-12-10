@@ -1,4 +1,6 @@
-module rx_mac_control (
+module rx_mac_control #(
+    parameter DATA_WIDTH = rx_tx_pkg::DATA_WIDTH
+)(
     // GMII interface
     input logic gmii_rx_clk_i,
     input logic [DATA_WIDTH-1:0] gmii_rx_data_i,
@@ -20,7 +22,6 @@ module rx_mac_control (
     output logic frame_error_o // high at eof if CRC or other error
 );
 
-import mem_pkg::*;
 import rx_tx_pkg::*;
 
 // status and debug signals (simulation only)

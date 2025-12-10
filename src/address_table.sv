@@ -1,5 +1,5 @@
 module address_table #(
-    parameter int NUM_PORTS = 4
+    parameter int NUM_PORTS = switch_pkg::NUM_PORTS
 )(
     input logic clk, rst_n,
 

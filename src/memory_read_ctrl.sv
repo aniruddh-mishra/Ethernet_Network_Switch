@@ -1,6 +1,9 @@
 // memory read controller
 
-module memory_read_ctrl (
+module memory_read_ctrl #(
+    parameter int ADDR_W = mem_pkg::ADDR_W,
+    parameter int BLOCK_BITS = mem_pkg::BLOCK_BITS
+)(
     input logic clk,
     input logic rst_n,
 

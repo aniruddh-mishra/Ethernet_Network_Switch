@@ -2,7 +2,8 @@ module outputs #(
     parameter ADDR_W = mem_pkg::ADDR_W,
     parameter BLOCK_BYTES = mem_pkg::BLOCK_BYTES,
     parameter BLOCK_BITS = mem_pkg::BLOCK_BITS,
-    parameter NUM_PORTS = switch_pkg::NUM_PORTS
+    parameter NUM_PORTS = switch_pkg::NUM_PORTS,
+    parameter DATA_WIDTH = rx_tx_pkg::DATA_WIDTH
 ) (
     // Switch Clock Domain
     input logic switch_clk, switch_rst_n,
@@ -77,7 +78,7 @@ endgenerate
 // NUM_PORTS x egress
 generate
     for (p = 0; p < NUM_PORTS; p++) begin : GEN_EGRESS
-        egress #(.ADDR_W(ADDR_W)) egress_u (
+        egress egress_u (
             .gmii_tx_clk_o(gmii_tx_clk_o[p]),
             .gmii_tx_data_o(gmii_tx_data_o[p]),
             .gmii_tx_en_o(gmii_tx_en_o[p]),

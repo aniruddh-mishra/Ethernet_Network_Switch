@@ -1,5 +1,5 @@
 module voq #(
-    parameter int ADDR_W = 12
+    parameter int ADDR_W = mem_pkg::ADDR_W
 )(
     input logic clk, rst_n,
     input logic write_req_i,
