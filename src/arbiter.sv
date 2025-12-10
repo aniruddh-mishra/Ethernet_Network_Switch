@@ -153,8 +153,8 @@ module arbiter #(
     //// memory read control arbitration ////
     logic [$clog2(N)-1:0] cur_mem_read_port;
 
-    //assign free_req_o = free_req_i[cur_mem_read_port - 1];
-    assign free_req_o = 0;
+    assign free_req_o = free_req_i[cur_mem_read_port - 1];
+    // assign free_req_o = 0;
     assign free_block_idx_o = free_block_idx_i[cur_mem_read_port - 1];
     assign flood_o = flood_i[cur_mem_read_port - 1];
 
@@ -187,7 +187,7 @@ module arbiter #(
                     cur_mem_read_port <= cur_mem_read_port + 1;
             end
             if (eop_i[cur]) eop_ack[cur] <= 1;
-            if (sof_i[cur]) eop_ack[cur] <= 0;
+            else eop_ack[cur] <= 0;
         end
     end
 endmodule
