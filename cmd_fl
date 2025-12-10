@@ -29,7 +29,7 @@ src/egress.sv
 src/fl.sv
 src/inputs.sv
 src/mac_controllers.sv
-src/mac_read_ctrl.sv
+src/memory_read_ctrl.sv
 src/memory_write_ctrl.sv
 src/outputs.sv 
 src/rx_mac_control.sv
