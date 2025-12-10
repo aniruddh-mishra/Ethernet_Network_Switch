@@ -19,11 +19,10 @@ module tb_crossbar;
     // Translator outputs
     logic [NUM_PORTS-1:0] voq_write_reqs;
     logic [ADDR_W-1:0] voq_start_ptrs [NUM_PORTS-1:0];
+    logic flood_o;
 
     // Instantiate DUT
-    crossbar #(
-        .NUM_PORTS(NUM_PORTS),
-        .ADDR_W(ADDR_W)) dut (
+    crossbar dut (
         .clk(clk),
         .rst_n(rst_n),
         .eof_i(arb_eop_o),
@@ -32,7 +31,8 @@ module tb_crossbar;
         .rx_mac_dst_addr_i(arb_rx_mac_dst_addr_o),
         .data_start_ptr_i(arb_data_start_addr_o),
         .voq_write_reqs_o(voq_write_reqs),
-        .voq_start_ptrs_o(voq_start_ptrs)
+        .voq_start_ptrs_o(voq_start_ptrs),
+        .flood_o(flood_o)
     );
 
     // Clock generation
@@ -82,19 +82,19 @@ module tb_crossbar;
         apply_reset();
 
         // 1) First frame: unknown dst -> flood, learn src on port 0
-        send(48'h0000_0000_0001, 48'h0000_0000_00AA, 12'h010, 2'd0);
+        send(48'h0000_0000_0001, 48'h0000_0000_00AA, 6'h010, 2'd0);
 
         // 2) Second frame: dst = first src -> unicast to port 0, learn new src on port 1
-        send(48'h0000_0000_0002, 48'h0000_0000_0001, 12'h020, 2'd1);
+        send(48'h0000_0000_0002, 48'h0000_0000_0001, 6'h020, 2'd1);
 
         // 3) Third frame: dst = second src -> unicast to port 1, learn new src on port 2
-        send(48'h0000_0000_0003, 48'h0000_0000_0002, 12'h030, 2'd2);
+        send(48'h0000_0000_0003, 48'h0000_0000_0002, 6'h030, 2'd2);
 
         // 4) Unknown dst again -> flood
-        send(48'h0000_0000_0004, 48'h0000_0000_00BB, 12'h040, 2'd3);
+        send(48'h0000_0000_0004, 48'h0000_0000_00BB, 6'h040, 2'd3);
 
         // 5) Re-hit known dest (dst from step 3) -> unicast to port 1
-        send(48'h0000_0000_0005, 48'h0000_0000_0003, 12'h050, 2'd0);
+        send(48'h0000_0000_0005, 48'h0000_0000_0003, 6'h050, 2'd0);
 
         @(posedge clk);
         arb_eop_o = 1'b0;
