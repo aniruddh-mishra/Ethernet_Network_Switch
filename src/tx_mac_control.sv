@@ -119,15 +119,15 @@ always_comb begin
 
     case (current_state)
         IDLE: begin
-            if (!voq_valid_i && (block_ctr == 1)) voq_ready_o = 1'b1; // tell voq ready for next frame
+            if (!voq_valid_i && (block_ctr == 0)) voq_ready_o = 1'b1; // tell voq ready for next frame
             else begin
-                if (block_ctr == 1) begin // use block_ctr == 1 as flag that req has not been sent yet
+                if (block_ctr == 0) begin // use block_ctr == 0 as flag that req has not been sent yet
                     $display("TX MAC CTRL: Starting frame transmission from VOQ ptr 0x%0h", voq_ptr_i);
                     mem_start_addr_o = voq_ptr_i; // feed voq starting addr to mem read ctrl
                     next_saved_mem_start_addr_o = voq_ptr_i; // save starting addr
                     mem_start_o = 1'b1; // start signal
                     mem_re_o = 1'b1; 
-                    next_block_ctr = 0; // indicate req has been sent
+                    next_block_ctr = 63; // indicate req has been sent, 62 to skip footer
                 end else begin
                     if (mem_stalled) begin // mem is stalled, wait in IDLE instead of jumping to preamble early
                         $display("TX MAC CTRL: Memory read stalled while starting frame transmission, mem_stalled = pre_mem_re_o = %b && !frame_valid_i = %b", prev_mem_re_o, !frame_valid_i);
@@ -166,14 +166,14 @@ always_comb begin
             end
         end
         DATA: begin // frame_data_i[63] is the footer byte, ignore
-            if ((block_ctr == 61) && !saved_frame_end_i) begin // request next block if not last block
+            if ((block_ctr == 2) && !saved_frame_end_i) begin // request next block if not last block
                 if (!mem_req_flag) begin 
                     mem_re_o = 1'b1; // only assert mem_re_o for one cycle
                     next_mem_req_flag = 1'b1;
                 end else if (mem_stalled) begin 
                     mem_re_o = 1'b1; // stuck here for multiple cycles, so only keep asserting mem_re_o if stalled
                 end
-            end else if (block_ctr == 62) begin
+            end else if (block_ctr == 1) begin
                 next_mem_req_flag = 1'b0; // reset mem req flag
                 if (saved_frame_end_i && !fifo_full) begin // finish writing last byte, then move to IFG
                     next_tx_frame_count = tx_frame_count + 1;
@@ -189,18 +189,18 @@ always_comb begin
             if (!fifo_full) begin // only write with new data available + fifo not full, also don't update block ctr unless data written
                 fifo_din = block_buffer[block_ctr];
                 fifo_wr_en = 1'b1;
-                if (block_ctr == 62) begin
-                    next_block_ctr = 0; 
+                if (block_ctr == 1) begin
+                    next_block_ctr = 63;
                     next_saved_frame_end_i = frame_end_i; // latch current frame_end_i after all checks have been doing (and before it's updated next mem_re_o cycle)
                 end else begin
-                    next_block_ctr = block_ctr + 1;
+                    next_block_ctr = block_ctr - 1;
                 end
             end
         end
         IFG: begin // maintain 12-byte IFG
             if (sync_ifg_ctr_full[1]) begin // wait 11 times in gmii clk domain then go to IDLE (total 12 bytes)
                 voq_ready_o = 1'b1;
-                next_block_ctr = 1; // use 1 as a flag
+                next_block_ctr = 0; // use 0 as a flag
                 next_state = IDLE;
             end
         end
@@ -220,7 +220,7 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         // voq_ready_o <= 0;
         preamble_ctr <= 0;
         // IFG_ctr <= 0;
-        block_ctr <= 1;
+        block_ctr <= 0;
         block_buffer <= 0;
         saved_mem_start_addr_o <= 0;
         tx_frame_count <= 0;
@@ -262,7 +262,7 @@ end
 logic prev_fifo_rd_en;
 assign fifo_rd_en = !fifo_empty; // continuous read when data available
 assign gmii_tx_en_o = prev_fifo_rd_en; // tx_en follows
-assign gmii_tx_er_o = fifo_empty && (current_state != DATA); // error if fifo underflow, could be from mem stalling but must be during frame transmission 
+assign gmii_tx_er_o = fifo_empty && (current_state == DATA); // error if fifo underflow, could be from mem stalling but must be during frame transmission 
 
 logic [3:0] gmii_IFG_ctr; // 12 bytes
 logic [1:0] gmii_sync_current_state_idle;
