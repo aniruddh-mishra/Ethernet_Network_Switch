@@ -13,6 +13,7 @@ module translator #(
     output logic [NUM_PORTS-1:0] write_reqs_o,
     output logic [ADDR_W-1:0] start_ptrs_o [NUM_PORTS-1:0]
 );
+import mem_pkg::*;
 
 logic [ADDR_W-1:0] start_ptr_wait;
 logic [ADDR_W-1:0] start_ptr_o;
