@@ -34,9 +34,7 @@ logic [31:0] fifo_overflow_count; // # of times FIFO full - switch clk domain
 logic [31:0] fifo_underflow_count; // # of times FIFO empty - gmii clk domain
 
 // generate gmii clk
-clk_div #(
-    .DIVIDE(3) // 3 + 1 = 4, 125MHz from 500MHz switch clk
-) gmii_clk_gen (
+clk_div gmii_clk_gen (
     .clk_in(switch_clk),
     .rst_n(switch_rst_n),
     .clk_out(gmii_tx_clk_o)

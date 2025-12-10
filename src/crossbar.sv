@@ -18,7 +18,7 @@ module crossbar #(
     logic [$clog2(NUM_PORTS)-1:0] address_table_read_port;
 
     // DUTs
-    address_table #(.NUM_PORTS(NUM_PORTS)) addr_table (
+    address_table addr_table (
         .clk(clk), .rst_n(rst_n),
         .learn_req_i(eof_i),
         .learn_address_i(rx_mac_src_addr_i),
@@ -29,7 +29,7 @@ module crossbar #(
         .read_port_valid_o(address_table_read_address_valid)
     );
 
-    translator #(.NUM_PORTS(NUM_PORTS), .ADDR_W(ADDR_W)) translator_inst (
+    translator translator_inst (
         .clk(clk), .rst_n(rst_n),
         .start_ptr_i(data_start_ptr_i),
         .dest_addr_i(rx_mac_dst_addr_i),

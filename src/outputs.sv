@@ -78,7 +78,7 @@ endgenerate
 // NUM_PORTS x egress
 generate
     for (p = 0; p < NUM_PORTS; p++) begin : GEN_EGRESS
-        egress #(.ADDR_W(ADDR_W)) egress_u (
+        egress egress_u (
             .gmii_tx_clk_o(gmii_tx_clk_o[p]),
             .gmii_tx_data_o(gmii_tx_data_o[p]),
             .gmii_tx_en_o(gmii_tx_en_o[p]),

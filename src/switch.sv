@@ -100,11 +100,7 @@ module switch #(
     logic [NUM_PORTS-1:0] crossbar_voq_write_reqs;
     logic [ADDR_W-1:0] crossbar_voq_start_ptrs [NUM_PORTS-1:0];
 
-    inputs #(
-        .NUM_PORTS(NUM_PORTS),
-        .ADDR_W(ADDR_W),
-        .BLOCK_BITS(BLOCK_BITS)
-    ) inputs_u (
+    inputs inputs_u (
         // GMII RX interface
         .gmii_rx_clk_i(gmii_rx_clk_i),
         .gmii_rx_data_i(gmii_rx_data_i),
@@ -138,9 +134,7 @@ module switch #(
     );
 
     // 1 x arbiter
-    arbiter #(
-        .N(NUM_PORTS)
-    ) arbiter_u (
+    arbiter arbiter_u (
         .clk(switch_clk),
         .rst_n(switch_rst_n),
 
@@ -231,9 +225,7 @@ module switch #(
         .rvalid (sram_rvalid)
     );
 
-    crossbar #(
-        .NUM_PORTS(NUM_PORTS),
-        .ADDR_W(ADDR_W)) crossbar_u (
+    crossbar crossbar_u (
         .clk(switch_clk),
         .rst_n(switch_rst_n),
         .eof_i(arbiter_eop),
@@ -245,12 +237,7 @@ module switch #(
         .voq_start_ptrs_o(crossbar_voq_start_ptrs)
     );
 
-    outputs #(
-        .NUM_PORTS(NUM_PORTS),
-        .ADDR_W(ADDR_W),
-        .BLOCK_BYTES(BLOCK_BYTES),
-        .BLOCK_BITS(BLOCK_BITS)
-    ) outputs_u (
+    outputs outputs_u (
         .switch_clk(switch_clk),
         .switch_rst_n(switch_rst_n),
 

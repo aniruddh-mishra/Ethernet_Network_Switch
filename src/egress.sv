@@ -33,7 +33,7 @@ logic tx_mac_control_voq_read_req;
 logic [ADDR_W-1:0] voq_ptr_out;
 logic voq_ptr_valid;
 
-voq #(.ADDR_W(ADDR_W)) voq_u (
+voq voq_u (
     .clk(switch_clk),
     .rst_n(switch_rst_n),
     .write_req_i(voq_write_req_i),
@@ -43,7 +43,7 @@ voq #(.ADDR_W(ADDR_W)) voq_u (
     .ptr_valid_o(voq_ptr_valid)
 );
 
-tx_mac_control #(.BLOCK_BYTES(BLOCK_BYTES)) tx_mac_control_u (
+tx_mac_control tx_mac_control_u (
     // GMII interface
     .gmii_tx_clk_o(gmii_tx_clk_o),
     .gmii_tx_data_o(gmii_tx_data_o),
