@@ -143,7 +143,7 @@ module memory_write_ctrl (
                             end
 
                             mem_addr_o  <= curr_idx;
-                            mem_wdata_o <= { payload_reg, footer_tmp }; // uses new footer
+                            mem_wdata_o <= { payload_reg << (8 * (63 - beat_cnt)), footer_tmp};
                             mem_we_o    <= 1'b1;
                             frame_cnt   <= frame_cnt + 1;
                         end
