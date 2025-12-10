@@ -1,5 +1,3 @@
-`timescale 1ns/1ps
-
 module tb_address_table;
 
     import switch_pkg::*;

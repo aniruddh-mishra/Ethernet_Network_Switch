@@ -1,20 +1,28 @@
+// simple 1 cycle blocked sram
 module sram (
-    input logic clk,
+    input logic clk, rst_n,
 
-    // Port Write
-    input logic we_i,
-    input logic [ADDR_W-1:0] w_addr_i,
-    input logic [BLOCK_BITS-1:0] w_data_i,
-
-    // Port Read
-    input logic [ADDR_W-1:0] r_addr_i,
-    output logic [BLOCK_BITS-1:0] r_data_o
+    input logic we,
+    input logic re,
+    input logic [ADDR_W-1:0] r_addr,
+    input logic [ADDR_W-1:0] w_addr,
+    input logic [BLOCK_BITS-1:0] wdata,
+    output logic [BLOCK_BITS-1:0] rdata,
+    output logic rvalid
 );
+    import mem_pkg::*;
 
-    logic [BLOCK_BITS-1:0] mem [NUM_BLOCKS-1:0];
+    logic [BLOCK_BITS-1:0] mem [NUM_BLOCKS];
 
-    always_ff @(posedge clk) begin
-        if (we_i) mem[w_addr_i] <= w_data_i;
-        r_data_o <= mem[r_addr_i];
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) rvalid <= 1'b0;
+        else begin
+            rvalid <= 1'b0;
+            if (we) mem[w_addr] <= wdata;
+            if (re) begin
+                rdata <= mem[r_addr];
+                rvalid <= 1'b1;
+            end
+        end
     end
 endmodule

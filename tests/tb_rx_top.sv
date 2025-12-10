@@ -1,4 +1,4 @@
-module tb_switch;
+module tb_rx_top;
 
     // Import the package
     import rx_tx_pkg::*;
@@ -9,7 +9,6 @@ module tb_switch;
     localparam int GMII_CLK_PERIOD   = 8;  // 125 MHz
     localparam int SWITCH_CLK_PERIOD = 2;  // 500 MHz
 
-    // Keep the original count, but we will only drive port 0
     localparam int unsigned NUM_PKTS_PER_PORT = 3;
 
     // Random payload bounds (bytes)
@@ -17,15 +16,10 @@ module tb_switch;
     localparam int unsigned MAX_PAYLOAD_LEN = 300;
 
     // DUT signals
-    logic gmii_rx_clk [NUM_PORTS-1:0];
+    logic gmii_rx_clk;
     logic [DATA_WIDTH-1:0] gmii_rx_data [NUM_PORTS-1:0];
     logic gmii_rx_dv [NUM_PORTS-1:0];
     logic gmii_rx_er [NUM_PORTS-1:0];
-
-    logic gmii_tx_clk_o [NUM_PORTS-1:0];
-    logic [DATA_WIDTH-1:0] gmii_tx_data_o [NUM_PORTS-1:0];
-    logic gmii_tx_en_o [NUM_PORTS-1:0];
-    logic gmii_tx_er_o [NUM_PORTS-1:0];
 
     logic switch_clk, switch_rst_n;
 
@@ -48,12 +42,8 @@ module tb_switch;
 
     // Clock generation
     initial begin
-        gmii_rx_clk = '{default:'0};
-        forever #(GMII_CLK_PERIOD/2) begin
-            for (int i = 0; i < NUM_PORTS; i++) begin
-                gmii_rx_clk[i] = ~gmii_rx_clk[i];
-            end
-        end
+        gmii_rx_clk = 0;
+        forever #(GMII_CLK_PERIOD/2) gmii_rx_clk = ~gmii_rx_clk;
     end
 
     initial begin
@@ -62,12 +52,12 @@ module tb_switch;
     end
 
     initial begin
-        $dumpfile("tb_switch.vcd");
-        $dumpvars(0, tb_switch);
+        $dumpfile("tb_rx_top.vcd");
+        $dumpvars(0, tb_rx_top);
     end
 
     // DUT instantiation
-    switch dut (
+    rx_top dut (
         // GMII interface
         .gmii_rx_clk_i(gmii_rx_clk),
         .gmii_rx_data_i(gmii_rx_data),
@@ -76,13 +66,7 @@ module tb_switch;
 
         // switch's clk domain
         .switch_clk  (switch_clk),
-        .switch_rst_n(switch_rst_n),
-        
-        // GMII Outputs
-        .gmii_tx_clk_o(gmii_tx_clk_o),
-        .gmii_tx_data_o(gmii_tx_data_o),
-        .gmii_tx_en_o(gmii_tx_en_o),
-        .gmii_tx_er_o(gmii_tx_er_o)
+        .switch_rst_n(switch_rst_n)
     );
 
     // Enforce expected port count
@@ -101,14 +85,6 @@ module tb_switch;
         mac_add = base + {16'h0, inc[31:0]};
     endfunction
 
-    // Reuse pattern: with 3 pkts, repeat pkt0 MACs on pkt2
-    function automatic int unsigned mac_inc_sel(input int unsigned k);
-        if (k == (NUM_PKTS_PER_PORT-1))
-            mac_inc_sel = 0;  // last pkt repeats inc 0
-        else
-            mac_inc_sel = k;
-    endfunction
-
     // Drive one GMII byte on a specific port
     task automatic send_byte(
         input logic [7:0] data,
@@ -116,7 +92,7 @@ module tb_switch;
         input logic dv = 1'b1,
         input logic er = 1'b0
     );
-        @(posedge gmii_rx_clk[0]);
+        @(posedge gmii_rx_clk);
         gmii_rx_data[port] = data;
         gmii_rx_dv  [port] = dv;
         gmii_rx_er  [port] = er;
@@ -124,7 +100,7 @@ module tb_switch;
 
     // Idle a port
     task automatic idle_port(input port_t port);
-        @(posedge gmii_rx_clk[0]);
+        @(posedge gmii_rx_clk);
         gmii_rx_data[port] = '0;
         gmii_rx_dv  [port] = 1'b0;
         gmii_rx_er  [port] = 1'b0;
@@ -187,7 +163,7 @@ module tb_switch;
 
         // IFG >= 12 GMII clocks
         repeat (12) begin
-            @(posedge gmii_rx_clk[0]);
+            @(posedge gmii_rx_clk);
             gmii_rx_data[port] = '0;
             gmii_rx_dv  [port] = 1'b0;
             gmii_rx_er  [port] = 1'b0;
@@ -195,8 +171,6 @@ module tb_switch;
     endtask
 
     // Send the kth frame on one port
-    // - Port 0 only in this TB
-    // - For k>=1: dst MAC matches previous packet's src MAC
     task automatic send_kth_frame_on_port(
         input port_t port,
         input int unsigned k,
@@ -207,34 +181,21 @@ module tb_switch;
     );
         logic [47:0] dst, src;
         logic [15:0] et;
-        int unsigned k_sel, k_prev_sel;
 
-        k_sel = mac_inc_sel(k);
-
-        // Current source MAC
-        src = mac_add(base_src, k_sel);
-
-        // Destination MAC:
-        // pkt0 uses base dst.
-        // subsequent pkts target the previous pkt's source
-        if (k == 0) begin
-            dst = mac_add(base_dst, k_sel);
-        end else begin
-            k_prev_sel = mac_inc_sel(k-1);
-            dst = mac_add(base_src, k_prev_sel);
-        end
-
+        dst = mac_add(base_dst, k);
+        src = mac_add(base_src, k);
         et  = base_type + k[15:0];
 
-        $display("[%0t] Port %0d sending pkt %0d (mac_sel=%0d) dst=%h src=%h type=%h payload=%0d",
-                 $time, port, k, k_sel, dst, src, et, payload_len);
+        $display("[%0t] Port %0d sending pkt %0d dst=%h src=%h type=%h payload=%0d",
+                 $time, port, k, dst, src, et, payload_len);
 
         send_simple_frame(dst, src, et, payload_len, port);
     endtask
 
     // ----------------------------
-    // Single-port worker process (PORT 0 only)
+    // Per-port worker processes
     // ----------------------------
+
     initial begin : PORT0_PROC
         port_t ap;
         ap = port_t'(0);
@@ -243,12 +204,50 @@ module tb_switch;
 
         for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
             wait (round_go && (round_idx == k));
-            send_kth_frame_on_port(ap, k,
-                                   base_dst_arr[0],
-                                   base_src_arr[0],
-                                   base_type_arr[0],
-                                   payload_len_tbl[0][k]);
+            send_kth_frame_on_port(ap, k, base_dst_arr[0], base_src_arr[0], base_type_arr[0], payload_len_tbl[0][k]);
             port_done[0] = 1'b1;
+            wait (!round_go);
+        end
+    end
+
+    initial begin : PORT1_PROC
+        port_t ap;
+        ap = port_t'(1);
+
+        wait (start_go);
+
+        for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
+            wait (round_go && (round_idx == k));
+            send_kth_frame_on_port(ap, k, base_dst_arr[1], base_src_arr[1], base_type_arr[1], payload_len_tbl[1][k]);
+            port_done[1] = 1'b1;
+            wait (!round_go);
+        end
+    end
+
+    initial begin : PORT2_PROC
+        port_t ap;
+        ap = port_t'(2);
+
+        wait (start_go);
+
+        for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
+            wait (round_go && (round_idx == k));
+            send_kth_frame_on_port(ap, k, base_dst_arr[2], base_src_arr[2], base_type_arr[2], payload_len_tbl[2][k]);
+            port_done[2] = 1'b1;
+            wait (!round_go);
+        end
+    end
+
+    initial begin : PORT3_PROC
+        port_t ap;
+        ap = port_t'(3);
+
+        wait (start_go);
+
+        for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
+            wait (round_go && (round_idx == k));
+            send_kth_frame_on_port(ap, k, base_dst_arr[3], base_src_arr[3], base_type_arr[3], payload_len_tbl[3][k]);
+            port_done[3] = 1'b1;
             wait (!round_go);
         end
     end
@@ -277,41 +276,51 @@ module tb_switch;
         switch_rst_n = 1'b1;
         repeat(10) @(posedge switch_clk);
 
-        $display("\n=== RX single-port test (port 0 only) ===");
-        $display("Packets: 0 normal, 1 dst=src(pkt0), 2 dst=src(pkt1) with MAC reuse");
+        $display("\n=== RX parallel 4-port, 3-packet/port test (random payload 48..300, lockstep, NO fork) ===");
+        $display("NUM_PORTS=%0d, pkts/port=%0d", NUM_PORTS, NUM_PKTS_PER_PORT);
 
-        // Precompute random payload lengths (only port 0 is used)
-        for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
-            payload_len_tbl[0][k] = $urandom_range(MAX_PAYLOAD_LEN, MIN_PAYLOAD_LEN);
+        // Precompute random payload lengths
+        for (int p = 0; p < NUM_PORTS; p++) begin
+            for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
+                payload_len_tbl[p][k] = $urandom_range(MAX_PAYLOAD_LEN, MIN_PAYLOAD_LEN);
+            end
         end
 
-        // Initialize port 0 bases (others unused)
-        base_dst_arr[0]  = 48'h10_20_30_40_50_00;
-        base_src_arr[0]  = 48'h00_11_22_33_44_00;
-        base_type_arr[0] = 16'h0800;
+        // Initialize per-port bases
+        for (int p = 0; p < NUM_PORTS; p++) begin
+            base_dst_arr[p]  = 48'h10_20_30_40_50_00 + {16'h0, p[31:0]};
+            base_src_arr[p]  = 48'h00_11_22_33_44_00 + {16'h0, p[31:0]};
+            base_type_arr[p] = 16'h0800 + p[15:0];
+        end
 
-        // Release worker
-        @(posedge gmii_rx_clk[0]);
+        // Release workers
+        @(posedge gmii_rx_clk);
         start_go = 1'b1;
 
-        // Lockstep rounds driven by handshake (only wait port 0)
+        // Lockstep rounds driven by handshake
         for (int k = 0; k < NUM_PKTS_PER_PORT; k++) begin
             port_done = '0;
             round_idx = k;
             round_go  = 1'b1;
 
-            wait (port_done[0]);
+            // Wait all ports finish this round
+            wait (&port_done);
 
+            // Drop round flag so workers can advance
             round_go = 1'b0;
 
-            @(posedge gmii_rx_clk[0]);
+            // Give a GMII edge for clean observation
+            @(posedge gmii_rx_clk);
         end
 
-        // Give the switch domain time after completion
-        repeat(2000) @(posedge switch_clk);
+        // Give the switch domain time after all completes
+        repeat(200) @(posedge switch_clk);
 
         // Optional visibility if these internal signals exist in your rx_top
-        // $display("[%0t] Port0 frame_error = %0b", $time, dut.rx_mac_control_frame_error[0]);
+       // $display("[%0t] Port0 frame_error = %0b", $time, dut.rx_mac_control_frame_error[0]);
+       // $display("[%0t] Port1 frame_error = %0b", $time, dut.rx_mac_control_frame_error[1]);
+      //  $display("[%0t] Port2 frame_error = %0b", $time, dut.rx_mac_control_frame_error[2]);
+       // $display("[%0t] Port3 frame_error = %0b", $time, dut.rx_mac_control_frame_error[3]);
 
         $display("\n=== Done ===");
         $finish;

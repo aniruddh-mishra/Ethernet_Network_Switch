@@ -1,3 +1,4 @@
+// memory write controller
 module memory_write_ctrl (
     input logic clk,
     input logic rst_n,
@@ -23,30 +24,42 @@ module memory_write_ctrl (
     // to arb
     output logic [ADDR_W-1:0] start_addr_o
 );
+    import mem_pkg::*;
+    // block size is 64 bytes, beat size is 1 byte
+    // 62 bytes reserved for packet payload, 2 bytes for footer
+    localparam int PAYLOAD_BITS = 8 * PAYLOAD_BYTES;
+
     typedef enum logic [1:0] {IDLE, WRITE_PAYLOAD, WAIT, WRITE_FOOTER} state_t;
 
     logic frame_allocated;
     logic next_frame_allocated;
 
-    assign fl_alloc_req_o = !frame_allocated || !next_frame_allocated;
-
     // locals
     state_t state, state_n;
-    footer_t footer;
 
     logic [PAYLOAD_BITS-1:0] payload_reg;
-    logic [$clog2(BLOCK_BYTES)-1:0] beat_cnt; // 7 beats per payload, last beat is for footer
+    logic [$clog2(BLOCK_BYTES)-1:0] beat_cnt;
     logic [ADDR_W-1:0] curr_idx; // current block idx
     logic [ADDR_W-1:0] next_idx; // used for footer
-
-    logic mem_trans_success; // cycle delayed
 
     logic [ADDR_W-1:0] start_addr;
     logic [ADDR_W-1:0] frame_cnt;
 
     // not ready if waiting for frame allocation
-    assign data_ready_o = state != WAIT && !(state == WRITE_FOOTER && !mem_trans_success);
+    assign data_ready_o = state != WAIT && !(state == WRITE_FOOTER && !mem_ready_i);
     assign start_addr_o = start_addr;
+
+    always_comb begin
+        fl_alloc_req_o = 1'b0;
+
+        if (state != IDLE) begin
+            fl_alloc_req_o = (!frame_allocated && !fl_alloc_gnt_i)   ||
+                        (!frame_allocated && !next_frame_allocated) ||
+                        (!fl_alloc_gnt_i && !next_frame_allocated);
+        end
+    end
+
+    logic payload_data_end;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -57,14 +70,12 @@ module memory_write_ctrl (
             next_idx <= 0;
             frame_allocated <= 0;
             next_frame_allocated <= 0;
-            mem_trans_success <= 0;
             start_addr <= 0;
             frame_cnt <= 0;
+            payload_data_end <= 0;
         end
         else begin
             state <= state_n;
-            mem_trans_success <= mem_ready_i;
-
             mem_we_o <= 0;
             mem_addr_o <= 0;
             mem_wdata_o <= 0;
@@ -88,14 +99,16 @@ module memory_write_ctrl (
                     next_frame_allocated <= 0;
                     beat_cnt <= 0;
                     frame_cnt <= 0;
+                    payload_data_end <= 0;
 
                     if (data_valid_i && data_begin_i) begin
                         beat_cnt <= 1;
-                        payload_reg <= {488'b0, data_i}; // 488 + 8 = 496 = PAYLOAD_BITS
+                        payload_reg <= {496'b0, data_i}; // 496 + 8 = 504 = PAYLOAD_BITS
                     end
                 end
 
-                WRITE_PAYLOAD: begin                        
+                WRITE_PAYLOAD: begin         
+                    payload_data_end <= data_end_i;             
                     if (data_valid_i) begin
                         payload_reg <= {payload_reg[PAYLOAD_BITS-8-1:0], data_i};
                         beat_cnt <= beat_cnt + 1;
@@ -107,27 +120,33 @@ module memory_write_ctrl (
                 end
 
                 WRITE_FOOTER: begin
-                    if (mem_ready_i) begin
-                        footer.next_idx <= next_idx;
-                        footer.eop <= data_end_i;
-                        footer.rsvd <= 0;
+                    if (data_valid_i || data_end_i || payload_data_end) begin
+                        if (mem_ready_i) begin
+                            footer_t footer_tmp;  
 
-                        if (!data_end_i) begin
-                            beat_cnt <= 0;
-                            frame_allocated <= 1; // next_idx already allocated;
-                            next_frame_allocated <= 0;
-                            curr_idx <= next_idx;
+                            footer_tmp.next_idx = next_idx;
+                            footer_tmp.eop      = data_end_i | payload_data_end;
+                            footer_tmp.rsvd     = 1'b0;
 
-                            if (data_valid_i) begin
-                                beat_cnt <= 1;
-                                payload_reg <= {488'b0, data_i};
+                            payload_data_end <= 0;
+
+                            if (!data_end_i && !payload_data_end) begin
+                                beat_cnt <= 0;
+                                frame_allocated <= 1;
+                                next_frame_allocated <= 0;
+                                curr_idx <= next_idx;
+
+                                if (data_valid_i) begin
+                                    beat_cnt <= 1;
+                                    payload_reg <= {496'b0, data_i};
+                                end
                             end
-                        end
 
-                        mem_addr_o <= curr_idx;
-                        mem_wdata_o <= { payload_reg , footer };
-                        mem_we_o <= 1'b1;
-                        frame_cnt <= frame_cnt + 1;
+                            mem_addr_o  <= curr_idx;
+                            mem_wdata_o <= { payload_reg << (8 * (63 - beat_cnt)), footer_tmp};
+                            mem_we_o    <= 1'b1;
+                            frame_cnt   <= frame_cnt + 1;
+                        end
                     end
                 end
             endcase
@@ -145,7 +164,7 @@ module memory_write_ctrl (
             end
 
             WRITE_PAYLOAD: begin
-                if (data_valid_i && ({26'b0, beat_cnt} == PAYLOAD_BYTES))
+                if ((data_valid_i && (({26'b0, beat_cnt} == PAYLOAD_BYTES - 1))) || data_end_i)
                     state_n = (frame_allocated && next_frame_allocated) ? WRITE_FOOTER : WAIT;
             end
 
@@ -155,8 +174,8 @@ module memory_write_ctrl (
             end
 
             WRITE_FOOTER: begin
-                if (mem_trans_success) // mem transaction success
-                    state_n = data_end_i ? IDLE : WRITE_PAYLOAD;
+                if ((data_valid_i || data_end_i || payload_data_end) && mem_ready_i) // mem transaction success
+                    state_n = (data_end_i || payload_data_end) ? IDLE : WRITE_PAYLOAD;
                 // TODO: FIX SINGLE FRAME LEAK IF WE GO TO IDLE STATE (LOW PRIORITY)
             end
         endcase

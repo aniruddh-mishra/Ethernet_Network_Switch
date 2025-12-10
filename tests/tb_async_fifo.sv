@@ -1,7 +1,3 @@
-// system verilog tb for the async fifo
-
-`timescale 1ns/1ps
-
 module tb_async_fifo;
     // parameters
     localparam int DATA_WIDTH  = 8;
