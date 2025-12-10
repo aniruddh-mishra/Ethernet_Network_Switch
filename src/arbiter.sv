@@ -1,7 +1,9 @@
 // arbiter
 
 module arbiter #(
-    parameter int N=4
+    parameter int N=switch_pkg::NUM_PORTS,
+    parameter int BLOCK_BITS=mem_pkg::BLOCK_BITS,
+    parameter int ADDR_W=mem_pkg::ADDR_W
 ) (
     input clk,
     input logic rst_n,
