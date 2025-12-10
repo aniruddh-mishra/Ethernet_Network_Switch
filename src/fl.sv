@@ -1,6 +1,9 @@
 // free list
 
-module fl (
+module fl #(
+    parameter int ADDR_W = mem_pkg::ADDR_W,
+    parameter int NUM_BLOCKS = mem_pkg::NUM_BLOCKS
+)(
     input logic clk,
     input logic rst_n,
 
@@ -13,7 +16,6 @@ module fl (
     input logic free_req_i,
     input logic [ADDR_W-1:0] free_block_idx_i
 );
-    import mem_pkg::*;
     logic [ADDR_W-1:0] stack [NUM_BLOCKS+1];
     logic [ADDR_W:0] sp; // stack index is 1 wider
     // sp points to top of stack

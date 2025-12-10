@@ -1,6 +1,7 @@
 module tx_mac_control #(
-    parameter ADDR_W = 6,
-    parameter BLOCK_BYTES = 64
+    parameter ADDR_W = mem_pkg::ADDR_W,
+    parameter BLOCK_BYTES = mem_pkg::BLOCK_BYTES,
+    parameter DATA_WIDTH = rx_tx_pkg::DATA_WIDTH
 )(
     // GMII interface
     output logic gmii_tx_clk_o,
@@ -25,7 +26,6 @@ module tx_mac_control #(
 );
 
 import rx_tx_pkg::*;
-import voq_pkg::*;
 
 // status and debug signals (simulation only)
 logic [31:0] tx_frame_count; // # of frames transmitted

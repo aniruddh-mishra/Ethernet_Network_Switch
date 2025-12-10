@@ -1,5 +1,9 @@
 // memory write controller
-module memory_write_ctrl (
+module memory_write_ctrl #(
+    parameter int ADDR_W = mem_pkg::ADDR_W,
+    parameter int BLOCK_BITS = mem_pkg::BLOCK_BITS,
+    parameter int PAYLOAD_BYTES = mem_pkg::PAYLOAD_BYTES
+)(
     input logic clk,
     input logic rst_n,
 

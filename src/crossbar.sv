@@ -1,6 +1,6 @@
 module crossbar #(
-    parameter int NUM_PORTS = 4,
-    parameter int ADDR_W = 12
+    parameter int NUM_PORTS = switch_pkg::NUM_PORTS,
+    parameter int ADDR_W = mem_pkg::ADDR_W
 ) (
     input logic clk, rst_n,
     input eof_i,
@@ -11,7 +11,6 @@ module crossbar #(
     output logic [NUM_PORTS-1:0] voq_write_reqs_o,
     output logic [ADDR_W-1:0] voq_start_ptrs_o [NUM_PORTS-1:0]
 );
-
     // Wires between translator and address table
     logic address_table_read_req;
     logic address_table_read_address_valid;

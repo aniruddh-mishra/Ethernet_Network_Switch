@@ -1,6 +1,6 @@
 module translator #(
-    parameter int NUM_PORTS = 4,
-    parameter int ADDR_W = 12
+    parameter int NUM_PORTS = switch_pkg::NUM_PORTS,
+    parameter int ADDR_W = mem_pkg::ADDR_W
 ) (
     input logic clk, rst_n,
     input logic [ADDR_W-1:0] start_ptr_i,

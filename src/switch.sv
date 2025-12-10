@@ -1,5 +1,6 @@
 module switch #(
-    parameter int NUM_PORTS = 4
+    parameter int NUM_PORTS = switch_pkg::NUM_PORTS,
+    parameter int DATA = rx_tx_pkg::DATA_WIDTH
 ) (
     // GMII Inputs
     input logic gmii_rx_clk_i [NUM_PORTS-1:0],
@@ -17,10 +18,8 @@ module switch #(
     output logic gmii_tx_en_o [NUM_PORTS-1:0],
     output logic gmii_tx_er_o [NUM_PORTS-1:0]
 );
-
     import mem_pkg::*;
     import rx_tx_pkg::*;
-    import switch_pkg::*;
 
     // =========================================================
     // rx_mac_control _o signals (per-port)

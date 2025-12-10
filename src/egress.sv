@@ -1,6 +1,7 @@
 module egress #(
-    parameter ADDR_W = 6,
-    parameter BLOCK_BYTES = 64
+    parameter ADDR_W = mem_pkg::ADDR_W,
+    parameter DATA_WIDTH = rx_tx_pkg::DATA_WIDTH,
+    parameter BLOCK_BYTES = mem_pkg::BLOCK_BYTES
 )(
     // GMII interface
     output logic gmii_tx_clk_o,
