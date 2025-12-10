@@ -149,8 +149,8 @@ module arbiter #(
     //// memory read control arbitration ////
     logic [$clog2(N)-1:0] cur_mem_read_port;
 
-    // assign free_req_o = free_req_i[cur_mem_read_port - 1];
-    assign free_req_o = 0;
+    assign free_req_o = free_req_i[cur_mem_read_port - 1];
+    //assign free_req_o = 0;
     assign free_block_idx_o = free_block_idx_i[cur_mem_read_port - 1];
 
     always_comb begin
