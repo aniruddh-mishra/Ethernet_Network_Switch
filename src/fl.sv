@@ -1,9 +1,6 @@
 // free list
 
-module fl #(
-    parameter int ADDR_W = mem_pkg::ADDR_W,
-    parameter int NUM_BLOCKS = mem_pkg::NUM_BLOCKS
-)(
+module fl (
     input logic clk,
     input logic rst_n,
 
@@ -14,52 +11,96 @@ module fl #(
    
     // free
     input logic free_req_i,
-    input logic [ADDR_W-1:0] free_block_idx_i
+    input logic [ADDR_W-1:0] free_block_idx_i,
+    input logic flood
 );
+    import mem_pkg::*;
+
     logic [ADDR_W-1:0] stack [NUM_BLOCKS+1];
-    logic [ADDR_W:0] sp; // stack index is 1 wider
+    logic [ADDR_W:0]   sp; // stack index is 1 wider
     // sp points to top of stack
 
-    logic empty, full;
-    assign empty = sp == 0;
-    assign full = {25'b0, sp} == NUM_BLOCKS;
+    // Per-block flood counters
+    logic [2:0] free_cnt [NUM_BLOCKS-1:0];
 
-    logic exists_in_stack;
-    // check if free_block_idx_i is already in stack
-    always_comb begin
-        exists_in_stack = 0;
-        for (int i = 1; i <= sp; i++) begin
-            if (stack[i] == free_block_idx_i) begin
-                exists_in_stack = 1;
-            end
-        end
-    end
+    logic empty, full;
+    assign empty = (sp == 0);
+    assign full  = (sp == NUM_BLOCKS[ADDR_W:0]);
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             sp <= NUM_BLOCKS[ADDR_W:0];
+
             // 0th entry unused
             for (int i = 0; i < NUM_BLOCKS; i++) begin
                 stack[i+1] <= i[ADDR_W-1:0];
             end
+
+            for (int i = 0; i < NUM_BLOCKS; i++) begin
+                free_cnt[i] <= 0;
+            end
+
+            alloc_gnt_o <= 0;
+            alloc_block_idx_o <= 0;
         end
         else begin
             alloc_gnt_o <= 0;
-            if (alloc_req_i && free_req_i && exists_in_stack) begin
-                // sp not updated
-                alloc_block_idx_o <= free_block_idx_i;
-                alloc_gnt_o <= 1;
+
+            // alloc and free
+            if (alloc_req_i && free_req_i) begin
+                if (!flood) begin
+                    alloc_block_idx_o <= free_block_idx_i;
+                    alloc_gnt_o <= 1;
+
+                    free_cnt[free_block_idx_i] <= 0;
+                end
+                else begin
+                    if (free_cnt[free_block_idx_i] == 3) begin
+                        // on 4th free , ungate
+                        alloc_block_idx_o <= free_block_idx_i;
+                        alloc_gnt_o <= 1;
+
+                        free_cnt[free_block_idx_i] <= 0;
+                    end
+                    else begin
+                        // not enough frees yet
+                        free_cnt[free_block_idx_i] <= free_cnt[free_block_idx_i] + 1;
+
+                        if (!empty) begin
+                            alloc_block_idx_o <= stack[sp];
+                            sp <= sp - 1;
+                            alloc_gnt_o <= 1;
+                        end
+                    end
+                end
             end
+
+            // alloc only
             else if (alloc_req_i && !empty) begin
-                // pop from stack
                 alloc_block_idx_o <= stack[sp];
                 sp <= sp - 1;
                 alloc_gnt_o <= 1;
             end
-            else if (free_req_i && !full && exists_in_stack) begin
-                // push to stack
-                stack[sp + 1] <= free_block_idx_i;
-                sp <= sp + 1;
+            
+            // free only
+            else if (free_req_i && !full) begin
+                if (!flood) begin
+                    stack[sp + 1] <= free_block_idx_i;
+                    sp <= sp + 1;
+
+                    free_cnt[free_block_idx_i] <= 0;
+                end
+                else begin
+                    if (free_cnt[free_block_idx_i] == 3) begin
+                        stack[sp + 1] <= free_block_idx_i;
+                        sp <= sp + 1;
+
+                        free_cnt[free_block_idx_i] <= 0;
+                    end
+                    else begin
+                        free_cnt[free_block_idx_i] <= free_cnt[free_block_idx_i] + 1;
+                    end
+                end
             end
         end
     end

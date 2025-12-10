@@ -1,9 +1,7 @@
 // arbiter
 
 module arbiter #(
-    parameter int ADDR_W=mem_pkg::ADDR_W,
-    parameter int BLOCK_BITS=mem_pkg::BLOCK_BITS,
-    parameter int N=switch_pkg::NUM_PORTS
+    parameter int N=4
 ) (
     input clk,
     input logic rst_n,
@@ -79,7 +77,8 @@ module arbiter #(
     // free signal to fl
     output logic free_req_o,
     output logic [ADDR_W-1:0] free_block_idx_o
-);
+);  
+    import mem_pkg::*;
     logic [$clog2(N)-1:0] cur;
 
     logic [N-1:0] eop_ack;
@@ -151,7 +150,7 @@ module arbiter #(
     logic [$clog2(N)-1:0] cur_mem_read_port;
 
     assign free_req_o = free_req_i[cur_mem_read_port - 1];
-    // assign free_req_o = 0;
+    //assign free_req_o = 0;
     assign free_block_idx_o = free_block_idx_i[cur_mem_read_port - 1];
 
     always_comb begin
