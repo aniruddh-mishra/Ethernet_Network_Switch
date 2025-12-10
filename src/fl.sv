@@ -1,6 +1,9 @@
 // free list
 
-module fl (
+module fl #(
+    parameter int ADDR_W = mem_pkg::ADDR_W,
+    parameter int NUM_BLOCKS = mem_pkg::NUM_BLOCKS
+)(
     input logic clk,
     input logic rst_n,
 
