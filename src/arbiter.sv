@@ -30,6 +30,7 @@ module arbiter #(
 
     // to fl
     output logic fl_alloc_req_o,
+    output logic flood_o,
 
     // from fl
     input logic fl_alloc_gnt_i,
@@ -57,6 +58,7 @@ module arbiter #(
     // from memory read ctrl
     input logic mem_re_i [N-1:0],
     input logic [ADDR_W-1:0] mem_raddr_i [N-1:0],
+    input logic flood_i [N-1:0],
     
     // to memory
     output logic mem_re_o,
@@ -152,6 +154,7 @@ module arbiter #(
     assign free_req_o = free_req_i[cur_mem_read_port - 1];
     //assign free_req_o = 0;
     assign free_block_idx_o = free_block_idx_i[cur_mem_read_port - 1];
+    assign flood_o = flood_i[cur_mem_read_port - 1];
 
     always_comb begin
         mem_rvalid_o = '{default:0};

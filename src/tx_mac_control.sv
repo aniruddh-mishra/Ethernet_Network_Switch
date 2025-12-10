@@ -15,6 +15,7 @@ module tx_mac_control #(
     // mem read ctrl interface
     output logic mem_re_o, mem_start_o,
     output logic [ADDR_W-1:0] mem_start_addr_o,
+    output logic flood_o,
     input logic [BLOCK_BYTES-1:0][DATA_WIDTH-1:0] frame_data_i, // input data one block at a time
     input logic frame_valid_i, // high for every cycle data is valid
     input logic frame_end_i, // high on last block of frame
@@ -22,6 +23,7 @@ module tx_mac_control #(
     // VOQ signals
     input logic voq_valid_i, // indicates VOQ has valid start ptr
     input logic [ADDR_W-1:0] voq_ptr_i, // starting mem ptr for frame
+    input logic flood_i, // indicates if input start address points to a flood frame
     output logic voq_ready_o // always high when ready to start frame
 );
 
@@ -232,6 +234,8 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         saved_frame_end_i <= 0;
 
         fifo_overflow_count <= 0;
+
+        flood_o <= 0;
     end else begin
         current_state <= next_state;
         // mem_re_o <= next_mem_re_o;
@@ -255,6 +259,8 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         
         // debug counter
         if (fifo_full) fifo_overflow_count <= fifo_overflow_count + 1;
+
+        if (voq_valid_i) flood_o <= flood_i;
     end
 end
 

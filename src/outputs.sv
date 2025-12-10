@@ -17,10 +17,12 @@ module outputs #(
     // Free list connections
     output logic memory_read_ctrl_free_req [NUM_PORTS-1:0],
     output logic [ADDR_W-1:0] memory_read_ctrl_free_block_idx [NUM_PORTS-1:0],
+    output logic memory_read_ctrl_floods [NUM_PORTS-1:0],
 
     // Inputs from crossbar
     input logic [NUM_PORTS-1:0] crossbar_voq_write_reqs,
     input logic [ADDR_W-1:0] crossbar_voq_start_ptrs [NUM_PORTS-1:0],
+    input logic crossbar_voq_flood,
 
     // GMII Outputs
     output logic gmii_tx_clk_o [NUM_PORTS-1:0],
@@ -35,6 +37,7 @@ import rx_tx_pkg::*;
 logic egress_re [NUM_PORTS-1:0];
 logic egress_start [NUM_PORTS-1:0];
 logic [ADDR_W-1:0] egress_addr [NUM_PORTS-1:0];
+logic egress_flood [NUM_PORTS-1:0];
 
 // Wires from memory_read_ctrl
 logic [BLOCK_BITS-1:0] memory_read_ctrl_data [NUM_PORTS-1:0];
@@ -67,10 +70,12 @@ generate
             .data_o(memory_read_ctrl_data[p]), // unused
             .data_valid_o(memory_read_ctrl_data_valid[p]), // unused
             .data_end_o(memory_read_ctrl_data_end[p]), // unused
+            .flood_i(egress_flood[p]),
 
             // interface with free list to free
             .free_req_o(memory_read_ctrl_free_req[p]),
-            .free_block_idx_o(memory_read_ctrl_free_block_idx[p])
+            .free_block_idx_o(memory_read_ctrl_free_block_idx[p]),
+            .flood_o(memory_read_ctrl_floods[p])
         );
     end
 endgenerate  
@@ -92,7 +97,9 @@ generate
             .mem_start_addr_o(egress_addr[p]),
             .frame_data_i(memory_read_ctrl_data[p]),
             .frame_valid_i(memory_read_ctrl_data_valid[p]),
-            .frame_end_i(memory_read_ctrl_data_end[p])
+            .frame_end_i(memory_read_ctrl_data_end[p]),
+            .flood_i(crossbar_voq_flood),
+            .flood_o(egress_flood[p])
         );
     end
 endgenerate  

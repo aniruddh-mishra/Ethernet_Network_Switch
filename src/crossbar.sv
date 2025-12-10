@@ -9,7 +9,8 @@ module crossbar #(
     input logic [47:0] rx_mac_dst_addr_i,
     input logic [ADDR_W-1:0] data_start_ptr_i,
     output logic [NUM_PORTS-1:0] voq_write_reqs_o,
-    output logic [ADDR_W-1:0] voq_start_ptrs_o [NUM_PORTS-1:0]
+    output logic [ADDR_W-1:0] voq_start_ptrs_o [NUM_PORTS-1:0],
+    output logic flood_o
 );
     // Wires between translator and address table
     logic address_table_read_req;
@@ -39,7 +40,8 @@ module crossbar #(
         .address_learn_enable_o(address_table_read_req),
         .address_learn_address_o(address_table_read_address),
         .write_reqs_o(voq_write_reqs_o),
-        .start_ptrs_o(voq_start_ptrs_o)
+        .start_ptrs_o(voq_start_ptrs_o),
+        .flood_o(flood_o)
     );
 
 endmodule

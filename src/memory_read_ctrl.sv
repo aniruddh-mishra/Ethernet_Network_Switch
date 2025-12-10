@@ -20,13 +20,15 @@ module memory_read_ctrl #(
     input logic [BLOCK_BITS-1:0] mem_rdata_i,
 
     // interface with consumer
+    input logic flood_i, // indicates if current frame is flood frame
     output logic [BLOCK_BITS-1:0] data_o, // 1 block out every cycle
     output logic data_valid_o,
     output logic data_end_o,
 
     // interface with free list to free
     output logic free_req_o,
-    output logic [ADDR_W-1:0] free_block_idx_o
+    output logic [ADDR_W-1:0] free_block_idx_o,
+    output logic flood_o
 );    
     import mem_pkg::*;
     footer_t footer; 
@@ -63,6 +65,7 @@ module memory_read_ctrl #(
             mem_rvalid <= 0;
             free_req <= 0;
             free_addr <= 0;
+            flood_o <= 0;
         end
         else begin
             mem_rvalid <= mem_rvalid_i;
@@ -74,8 +77,9 @@ module memory_read_ctrl #(
                 mem_rdata <= mem_rdata_i;
                 free_req <= 1;
             end
+
+            if (start) flood_o <= flood_i;
         end
     end
 
 endmodule
-

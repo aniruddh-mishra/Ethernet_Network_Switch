@@ -73,6 +73,7 @@ module switch #(
 
     logic                  arbiter_free_req;
     logic [ADDR_W-1:0]     arbiter_free_block_idx;
+    logic                 abriter_flood;
 
     // =========================================================
     // fl _o signals (single instance)
@@ -95,10 +96,12 @@ module switch #(
 
     logic memory_read_ctrl_free_req [NUM_PORTS-1:0];
     logic [ADDR_W-1:0] memory_read_ctrl_free_block_idx [NUM_PORTS-1:0];
+    logic memory_read_ctrl_floods [NUM_PORTS-1:0];
 
     // Crossbar outputs
     logic [NUM_PORTS-1:0] crossbar_voq_write_reqs;
     logic [ADDR_W-1:0] crossbar_voq_start_ptrs [NUM_PORTS-1:0];
+    logic crossbar_voq_flood;
 
     inputs inputs_u (
         // GMII RX interface
@@ -192,9 +195,11 @@ module switch #(
 
         .free_req_i (memory_read_ctrl_free_req),
         .free_block_idx_i (memory_read_ctrl_free_block_idx),
+        .flood_i(memory_read_ctrl_floods),
 
         .free_req_o (arbiter_free_req),
-        .free_block_idx_o (arbiter_free_block_idx)
+        .free_block_idx_o (arbiter_free_block_idx),
+        .flood_o(abriter_flood)
     );
 
     // 1 x fl
@@ -209,7 +214,8 @@ module switch #(
 
         // free
         .free_req_i(arbiter_free_req),
-        .free_block_idx_i(arbiter_free_block_idx)
+        .free_block_idx_i(arbiter_free_block_idx),
+        .flood(abriter_flood)
     );
 
     // 1 x sram
@@ -234,7 +240,8 @@ module switch #(
         .rx_mac_dst_addr_i(arbiter_rx_mac_dst_addr),
         .data_start_ptr_i(arbiter_data_start_addr),
         .voq_write_reqs_o(crossbar_voq_write_reqs),
-        .voq_start_ptrs_o(crossbar_voq_start_ptrs)
+        .voq_start_ptrs_o(crossbar_voq_start_ptrs),
+        .flood_o(crossbar_voq_flood)
     );
 
     outputs outputs_u (
@@ -250,10 +257,12 @@ module switch #(
         // Free list connections
         .memory_read_ctrl_free_req(memory_read_ctrl_free_req),
         .memory_read_ctrl_free_block_idx(memory_read_ctrl_free_block_idx),
+        .memory_read_ctrl_floods(memory_read_ctrl_floods),
 
         // Inputs from crossbar
         .crossbar_voq_write_reqs(crossbar_voq_write_reqs),
         .crossbar_voq_start_ptrs(crossbar_voq_start_ptrs),
+        .crossbar_voq_flood(crossbar_voq_flood),
 
         // GMII Outputs
         .gmii_tx_clk_o(gmii_tx_clk_o),
