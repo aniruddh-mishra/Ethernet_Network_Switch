@@ -62,7 +62,8 @@ typedef enum logic [1:0] {IDLE, PREAMBLE, HEADER, PAYLOAD} state_t;
 state_t current_state, next_state;
 
 logic [4:0] preamble_header_ctr, next_preamble_header_ctr; // preamble = 8 bytes, header = 6 + 6 + 2 bytes, total = 22 bytes
-logic prev_fifo_rd_en, crc_prev_fifo_rd_en; // needed b/c 1st cycle: req read, 2nd cycle: check data
+logic prev_fifo_rd_en;
+logic crc_prev_fifo_rd_en; // needed b/c 1st cycle: req read, 2nd cycle: check data
 logic [5:0][7:0] next_mac_dst_addr_o, next_mac_src_addr_o;
 logic [DATA_WIDTH-1:0] next_frame_data_o;
 logic next_frame_valid_o;
@@ -103,7 +104,7 @@ always_ff @(posedge switch_clk) begin
     /*
      if (!frame_grant_i && fifo_rd_en) prev_fifo_rd_en <= 1'b1; // the only case this will be true is if fifo_rd_en asserts on the same cycle grant is deasserted, so keep it high to not lose this byte
     */
-    prev_prev_fifo_rd_en <= crc_prev_fifo_rd_en;
+    prev_prev_fifo_rd_en <= prev_fifo_rd_en;
     if (prev_prev_fifo_rd_en && rx_dv && frame_grant_i) begin // only update when crc_reg and frame_data_o have just been updated with valid results, except for final time (!rx_dv) or frozen (!frame_grant_i)
         crc_buffer <= {crc_buffer[2:0], crc_reg}; // crc reg is clocked already, this stores 5 total clocked values --> needed for crc before all 4 FCS bytes
         data_buffer <= {data_buffer[1:0], frame_data_o}; // frame_data_o is also clocked, only 4 values needed for FCS
@@ -164,9 +165,9 @@ always_comb begin
                 fifo_rd_en = 1'b1; 
                 // if (frame_grant_i)$display("Reading FIFO in HEADER state");
             end 
-            if (prev_fifo_rd_en) begin
+            if (prev_fifo_rd_en || data_to_be_read) begin
                 next_crc_reg = crc32_next(fifo_dout, crc_reg);
-                // $display("[%0t] DUT in-progress CRC: %h", $time, next_crc_reg);
+                $display("[%0t] DUT in-progress CRC: %h", $time, next_crc_reg);
 
                 if (preamble_header_ctr == 8) begin
                     next_frame_sof_o = 1'b1;
@@ -191,9 +192,9 @@ always_comb begin
         end
         PAYLOAD: begin // assume frame fits within max and min bytes + follows IFG
             if (!fifo_empty && frame_grant_i) fifo_rd_en = 1'b1;
-            if (prev_fifo_rd_en) begin
+            if (prev_fifo_rd_en || data_to_be_read) begin
                 next_crc_reg = crc32_next(fifo_dout, crc_reg);
-                // $display("[%0t] DUT in-progress CRC: %h", $time, next_crc_reg);
+                $display("[%0t] DUT in-progress CRC: %h", $time, next_crc_reg);
                 next_frame_data_o = fifo_dout;
                 next_frame_valid_o = 1'b1;
             end else if (!rx_dv && fifo_empty) begin // sender has finished sending frame + we have read all data --> don't end early before last data
@@ -213,12 +214,14 @@ always_comb begin
     endcase
 end
 
+logic data_to_be_read; // flag to remember to read one more byte after frame_grant_i deasserts
+
 // output state machine (switch clk domain) - seq logic 
 always_ff @(posedge switch_clk or negedge switch_rst_n) begin
     if (!switch_rst_n) begin
         current_state <= IDLE;
         prev_fifo_rd_en <= 0;
-        crc_prev_fifo_rd_en <= 0;
+        // crc_prev_fifo_rd_en <= 0;
         frame_data_o <= 0;
         frame_eof_o <= 0;
         frame_sof_o <= 0;
@@ -237,6 +240,7 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         if (frame_grant_i || (current_state == IDLE) || (current_state == PREAMBLE)) begin // freeze current data if mem is backed up during data sending (header/payload)
             current_state <= next_state;
             prev_fifo_rd_en <= fifo_rd_en;
+            if (data_to_be_read) data_to_be_read <= 1'b0; // clear flag once read
             frame_data_o <= next_frame_data_o;
             frame_eof_o <= next_frame_eof_o;
             frame_sof_o <= next_frame_sof_o;
@@ -252,7 +256,7 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
             rx_error_count <= next_rx_error_count;
             rx_frame_count <= next_rx_frame_count;
         end else begin
-            if (!frame_grant_i && fifo_rd_en) prev_fifo_rd_en <= 1'b1; // the only case this will be true is if fifo_rd_en asserts on the same cycle grant is deasserted, so keep it high to not lose this byte
+            if (!frame_grant_i && fifo_rd_en) data_to_be_read <= 1'b1; // the only case this will be true is if fifo_rd_en asserts on the same cycle grant is deasserted, so keep it high to not lose this byte
             if (!rx_dv) begin
                 current_state <= IDLE; // if frame ended while mem backlogged, reset to IDLE, set error and eof for one cycle
                 frame_error_o <= ((current_state == IDLE) || (current_state == PREAMBLE)) ? 1'b0 : 1'b1; // mark error + eof so mem knows frame ended
@@ -263,7 +267,7 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
 
         // if (!frame_grant_i) $display("[%0t] frame_grant_i deasserted", $time);
 
-        crc_prev_fifo_rd_en <= fifo_rd_en;
+        // crc_prev_fifo_rd_en <= fifo_rd_en;
 
         if (fifo_empty) fifo_underflow_count <= fifo_underflow_count + 1;
     end
