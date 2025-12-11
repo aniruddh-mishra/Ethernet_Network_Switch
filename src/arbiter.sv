@@ -147,8 +147,7 @@ module arbiter #(
     assign rx_mac_src_addr_o = rx_mac_src_addr_i[cur];
     assign rx_mac_dst_addr_o = rx_mac_dst_addr_i[cur];
     assign data_start_addr_o = data_start_addr_i[cur];
-    assign eop_o = eop_i[cur] & ~eop_ack[cur];
-    // TODO: & ~data_error_i[cur];
+    assign eop_o = eop_i[cur] & ~eop_ack[cur] & ~data_error_i[cur];
 
     //// memory read control arbitration ////
     logic [$clog2(N)-1:0] cur_mem_read_port;

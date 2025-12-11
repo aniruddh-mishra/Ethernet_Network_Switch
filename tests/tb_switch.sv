@@ -237,7 +237,8 @@ module tb_switch;
         input logic [47:0] base_dst,
         input logic [47:0] base_src,
         input logic [15:0] base_type,
-        input int unsigned payload_len
+        input int unsigned payload_len,
+        input logic corrupt_crc = 0
     );
         logic [47:0] dst, src;
         logic [15:0] et;
@@ -263,7 +264,7 @@ module tb_switch;
         $display("[%0t] Port %0d sending pkt %0d (mac_sel=%0d) dst=%h src=%h type=%h payload=%0d",
                  $time, port, k, k_sel, dst, src, et, payload_len);
 
-        send_simple_frame(dst, src, et, payload_len, port);
+        send_simple_frame(dst, src, et, payload_len, port, corrupt_crc);
     endtask
 
     // ----------------------------
@@ -281,7 +282,7 @@ module tb_switch;
                                    base_dst_arr[0],
                                    base_src_arr[0],
                                    base_type_arr[0],
-                                   payload_len_tbl[0][k]);
+                                   payload_len_tbl[0][k], (k==0)); // Corrupt CRC on pkt2
             port_done[0] = 1'b1;
             wait (!round_go);
         end
