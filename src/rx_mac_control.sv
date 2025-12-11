@@ -62,7 +62,7 @@ typedef enum logic [1:0] {IDLE, PREAMBLE, HEADER, PAYLOAD} state_t;
 state_t current_state, next_state;
 
 logic [4:0] preamble_header_ctr, next_preamble_header_ctr; // preamble = 8 bytes, header = 6 + 6 + 2 bytes, total = 22 bytes
-logic prev_fifo_rd_en; // needed b/c 1st cycle: req read, 2nd cycle: check data
+logic prev_fifo_rd_en, crc_prev_fifo_rd_en; // needed b/c 1st cycle: req read, 2nd cycle: check data
 logic [5:0][7:0] next_mac_dst_addr_o, next_mac_src_addr_o;
 logic [DATA_WIDTH-1:0] next_frame_data_o;
 logic next_frame_valid_o;
@@ -100,7 +100,10 @@ logic [3:0][31:0] crc_buffer;
 logic [2:0][7:0] data_buffer;
 logic prev_prev_fifo_rd_en;
 always_ff @(posedge switch_clk) begin
-    prev_prev_fifo_rd_en <= prev_fifo_rd_en;
+    /*
+     if (!frame_grant_i && fifo_rd_en) prev_fifo_rd_en <= 1'b1; // the only case this will be true is if fifo_rd_en asserts on the same cycle grant is deasserted, so keep it high to not lose this byte
+    */
+    prev_prev_fifo_rd_en <= crc_prev_fifo_rd_en;
     if (prev_prev_fifo_rd_en && rx_dv && frame_grant_i) begin // only update when crc_reg and frame_data_o have just been updated with valid results, except for final time (!rx_dv) or frozen (!frame_grant_i)
         crc_buffer <= {crc_buffer[2:0], crc_reg}; // crc reg is clocked already, this stores 5 total clocked values --> needed for crc before all 4 FCS bytes
         data_buffer <= {data_buffer[1:0], frame_data_o}; // frame_data_o is also clocked, only 4 values needed for FCS
@@ -215,6 +218,7 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
     if (!switch_rst_n) begin
         current_state <= IDLE;
         prev_fifo_rd_en <= 0;
+        crc_prev_fifo_rd_en <= 0;
         frame_data_o <= 0;
         frame_eof_o <= 0;
         frame_sof_o <= 0;
@@ -258,6 +262,8 @@ always_ff @(posedge switch_clk or negedge switch_rst_n) begin
         end 
 
         // if (!frame_grant_i) $display("[%0t] frame_grant_i deasserted", $time);
+
+        crc_prev_fifo_rd_en <= fifo_rd_en;
 
         if (fifo_empty) fifo_underflow_count <= fifo_underflow_count + 1;
     end

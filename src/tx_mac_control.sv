@@ -134,13 +134,13 @@ always_comb begin
                     next_block_ctr = 63; // indicate req has been sent, 62 to skip footer
                 end else begin
                     if (mem_stalled) begin // mem is stalled, wait in IDLE instead of jumping to preamble early
-                        $display("TX MAC CTRL: Memory read stalled while starting frame transmission, mem_stalled = pre_mem_re_o = %b && !frame_valid_i = %b", prev_mem_re_o, !frame_valid_i);
+                        // $display("TX MAC CTRL: Memory read stalled while starting frame transmission, mem_stalled = pre_mem_re_o = %b && !frame_valid_i = %b", prev_mem_re_o, !frame_valid_i);
                         mem_start_addr_o = saved_mem_start_addr_o;
                         mem_start_o = 1'b1; // keep start high too
                         mem_re_o = 1'b1; 
                         next_mem_stall_count = mem_stall_count + 1;
                     end else begin // mem ready, jump to preamble
-                        $display("TX MAC CTRL: Memory read ready, beginning frame transmission");
+                        // $display("TX MAC CTRL: Memory read ready, beginning frame transmission");
                         next_block_buffer = frame_data_i;
                         next_saved_frame_end_i = frame_end_i; // set frame_end_i for first cycle
 
@@ -159,11 +159,11 @@ always_comb begin
             if (!fifo_full) begin
                 if (preamble_ctr < 7) begin 
                     fifo_din = PREAMBLE_BYTE;
-                    $display("TX MAC CTRL: Sending preamble byte at preamble_ctr %0d", preamble_ctr);
+                    // $display("TX MAC CTRL: Sending preamble byte at preamble_ctr %0d", preamble_ctr);
                 end else begin
                     fifo_din = SFD_BYTE;
                     next_state = DATA;
-                    $display("TX MAC CTRL: Sending SFD byte at preamble_ctr %0d", preamble_ctr);
+                    // $display("TX MAC CTRL: Sending SFD byte at preamble_ctr %0d", preamble_ctr);
                 end
                 fifo_wr_en = 1'b1;
                 next_preamble_ctr = preamble_ctr + 1;

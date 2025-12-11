@@ -139,14 +139,33 @@ module tb_switch;
         end
     endtask
 
+    // Task to calculate CRC32 for a frame
+    function automatic logic [31:0] calc_crc32(input logic [7:0] frame_bytes[]);
+        logic [31:0] crc = 32'hFFFFFFFF;
+        foreach(frame_bytes[i]) begin
+            crc = crc32_next(frame_bytes[i], crc);
+            $display("[%0t] CRC after byte %0d (%h): %h", $time, i, frame_bytes[i], crc);
+        end
+        $display("[%0t] Final CRC: %h", $time, crc);
+        return crc; // No invert for final CRC
+    endfunction
+
     task automatic send_simple_frame(
         input logic [47:0] dst_mac,
         input logic [47:0] src_mac,
         input logic [15:0] eth_type,
         input int unsigned payload_len,
-        input port_t port
+        input port_t port,
+        input logic corrupt_crc = 0
     );
         logic [31:0] fcs;
+        logic [31:0] crc;
+        logic [7:0] frame_data[];
+        int idx;
+
+        // Build frame for CRC calculation (header + payload)
+        frame_data = new[14 + payload_len]; $display("[%0t] [port %0d] frame_data array size: %0d", $time, port, frame_data.size());
+        idx = 0;
 
         // Preamble (7 x 0x55)
         for (int i = 0; i < 7; i++) begin
@@ -159,28 +178,43 @@ module tb_switch;
         // Destination MAC (MSB-first)
         for (int i = 5; i >= 0; i--) begin
             send_byte(dst_mac[i*8 +: 8], port);
+            frame_data[idx++] = dst_mac[i*8 +: 8]; $display("[%0t] [port %0d] Adding byte to frame_data[%0d]: %h", $time, port, idx-1, dst_mac[i*8 +: 8]);
         end
 
         // Source MAC
         for (int i = 5; i >= 0; i--) begin
             send_byte(src_mac[i*8 +: 8], port);
+            frame_data[idx++] = src_mac[i*8 +: 8]; $display("[%0t] [port %0d] Adding byte to frame_data[%0d]: %h", $time, port, idx-1, src_mac[i*8 +: 8]);
         end
 
         // EtherType
         send_byte(eth_type[15:8], port);
         send_byte(eth_type[7:0],  port);
+        // EtherType (2 bytes)
+        frame_data[idx++] = eth_type[15:8]; $display("[%0t] [port %0d] Adding byte to frame_data[%0d]: %h", $time, port, idx-2, eth_type[15:8]);
+        frame_data[idx++] = eth_type[7:0]; $display("[%0t] [port %0d] Adding byte to frame_data[%0d]: %h", $time, port, idx-1, eth_type[7:0]);
+                                               
 
         // Payload pattern
         for (int i = 0; i < payload_len; i++) begin
             send_byte(i[7:0], port);
+            frame_data[idx++] = i[7:0]; $display("[%0t] [port %0d] Adding byte to frame_data[%0d]: %h", $time, port, idx-1, i[7:0]);
         end
 
-        // Dummy FCS
-        fcs = 32'hDEADBEEF;
-        send_byte(fcs[7:0],   port);
-        send_byte(fcs[15:8],  port);
-        send_byte(fcs[23:16], port);
-        send_byte(fcs[31:24], port);
+        // Calculate CRC
+        crc = calc_crc32(frame_data); $display("[%0t] Calculated CRC: %h", $time, crc);
+        if (corrupt_crc) crc = crc ^ 32'hFFFFFFFF; // Corrupt it
+        send_byte(crc[31:24], port); // $display("[%0t] Sent CRC byte: %h", $time, crc[31:24]);
+        send_byte(crc[23:16], port); // $display("[%0t] Sent CRC byte: %h", $time, crc[23:16]);
+        send_byte(crc[15:8], port); // $display("[%0t] Sent CRC byte: %h", $time, crc[15:8]);
+        send_byte(crc[7:0], port); // $display("[%0t] Sent CRC byte: %h", $time, crc[7:0]);
+
+        // // Dummy FCS
+        // fcs = 32'hDEADBEEF;
+        // send_byte(fcs[7:0],   port);
+        // send_byte(fcs[15:8],  port);
+        // send_byte(fcs[23:16], port);
+        // send_byte(fcs[31:24], port);
 
         // End of frame
         idle_port(port);
